@@ -1,0 +1,19 @@
+This is a program designed to load images of cells and mark their coordinates.
+The program saves coordinate files with cell type and top left and bottom right coordinates.
+The coordinate files can then be used to train algorithms or human raters.
+
+This program is in ALPHA stage. A few minor things are broken, the code no doubt looks ugly, and some
+features that would be nice to have are missing. I'll try to fix it up when I can. However, I do not
+have the time and motivation to continue developing this program into a fully fledged software suite.
+I have uploaded it to Github as an early coding example.
+
+I've also included 40 images of cells in a folder. These are in .jpg, not an ideal format, but necessary
+to pass them across the globe through some very cranky university email systems.
+
+I've included 30 coordinate files marking the positions of the cells in the first 30 of 40 images.
+These files were generated using the cell counter program. Right now they are in Matlab format, but 
+I will convert them soon in an upcoming update.
+
+I've worked with a few collaborators who have tried to develop reliable identification coordinates 
+using these data files, without great success. I welcome anyone who wants to try to work with these files,
+or email me at jtmorgan61@gmail.com if they need more assistance.
