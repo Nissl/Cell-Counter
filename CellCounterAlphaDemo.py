@@ -1,8 +1,26 @@
 # This program is written for Python 2.6-2.7.
 # It requires the libraries wxpython, numpy, and scipy.
-# This is an alpha version. The code needs to be cleaned up.
-# Several things may not work as cleanly as would be ideal.
-# I wrote this a while ago, so the overall program design could be improved.
+# It allows the user to load an image and mark the coordinates of objects
+# (cells for my uses), as well as moving the image around using click and 
+# drag. The coordinates of cells in the image can then be saved.
+# Examples of these files in both .mat and .txt format, with the accompanying
+# images, are in the associated folders in the github distribution.
+
+# I want to emphasize: this is an alpha version. The code needs to be cleaned 
+# up. I wrote this years ago, and I know the overall program design could be 
+# dramatically improved.
+
+# Current todo:
+# Reduce dependence on global variables.
+# Break things up into more component parts.
+# Save to .txt and not .mat, and remove the scipy dependency. 
+# Replace arrays with lists, and remove the numpy dependency.
+# Fix whitespace on side of screen on high resolution monitors
+# Add full documentation so someone besides me can use it.
+
+# I plan to clean this up soon, but I have a ton of other things to learn 
+# that are critical for my immediate career goals.
+# Please, please look at other files to get a sense of my current programming.
 
 ############################################################################## 
 # These are program variables to be manipulated by a slightly savvy user.
@@ -49,6 +67,7 @@ scalebmpheight = 480
 import wx
 import numpy as np
 import scipy.io
+import textwrap
 
 # All arrays used have a blank header line because I found it easiest with my 
 # limited Python skills when I wrote this - DO NOT CHANGE
@@ -61,6 +80,7 @@ cellrecorddotscaled = np.array([0, 0, 0])
 
 # This is the main class in which cell marking and image movement takes place.
 class CellCounter(wx.Frame):
+    
     def __init__(self, parent, mysize):
         wx.Frame.__init__(self, parent, wx.ID_ANY, size=mysize, 
                           title="Cell Counter Alpha")
@@ -68,10 +88,9 @@ class CellCounter(wx.Frame):
         self.points = []
         self.scaledpoints = []
         markercount = 0
-
-        # create scrollbar
-        # self.scroll=wx.ScrolledWindow(self, -1)
-        # self.scroll.SetScrollbars(1, 1, 600, 400)
+  
+##############################################################################
+# menu setup
         
         # create menu, statusbar
         status = self.CreateStatusBar()
@@ -97,9 +116,8 @@ class CellCounter(wx.Frame):
         BV_SELECT = 203
 
         # assign third menu values
-        IMAGEMOVE_OFF = 301
-        DOT_SWITCH = 302
-        RECT_SWITCH = 303
+        DOT_SWITCH = 301
+        RECT_SWITCH = 302
 
         # assign fifth menu values
         RECTSIZE_SET = 401
@@ -108,7 +126,7 @@ class CellCounter(wx.Frame):
 
         # assign fourth menu values
         IMAGEMOVE_ON = 501
-        MACRO_SHOW = 502
+        IMAGEMOVE_OFF = 502
 
         # create menu contents
         # menu 1 - file handling menu
@@ -126,6 +144,15 @@ class CellCounter(wx.Frame):
                         "Export .mat file containing blood vessel cell data")
         filemenu.Append(IMPORT_MAT, "Import tracing from .mat",
                         "Import .mat file")
+        
+        self.Bind(wx.EVT_MENU, self.ScaledImageOpen, id=FILE_SCALED_OPEN)
+        self.Bind(wx.EVT_MENU, self.UnscaledImageOpen, id=FILE_UNSCALED_OPEN)
+        self.Bind(wx.EVT_MENU, self.ExportMat, id=EXPORT_MAT)
+        self.Bind(wx.EVT_MENU, self.ExportMatNeuron, id=EXPORT_MAT_NEURON)
+        self.Bind(wx.EVT_MENU, self.ExportMatGlia, id=EXPORT_MAT_GLIA)
+        self.Bind(wx.EVT_MENU, self.ExportMatBV, id=EXPORT_MAT_BV)
+        self.Bind(wx.EVT_MENU, self.ImportMat, id=IMPORT_MAT)
+
 
         # menu 2 - counting target selection menu
         popselectmenu.Append(NEURON_SELECT, "Neurons",
@@ -134,14 +161,19 @@ class CellCounter(wx.Frame):
                              "Mark glia")
         popselectmenu.Append(BV_SELECT, "Blood Vessel",
                              "Mark blood vessel cells")
+        
+        self.Bind(wx.EVT_MENU, self.NeuronButton, id=NEURON_SELECT)
+        self.Bind(wx.EVT_MENU, self.GliaButton, id=GLIA_SELECT)
+        self.Bind(wx.EVT_MENU, self.BVButton, id=BV_SELECT)
 
         # menu 3 - counting methods menu
-        countselectmenu.Append(IMAGEMOVE_OFF, "Mark Objects",
-                               "Turn on marking and turn off image move")
         countselectmenu.Append(DOT_SWITCH, "Point Mode",
                                "Mark objects with a single point")
-        countselectmenu.Append(RECT_SWITCH, "Box Mode",
+        countselectmenu.Append(RECT_SWITCH, "Rect Mode",
                                "Mark objects with a surrounding box")
+        
+        self.Bind(wx.EVT_MENU, self.DotSwitch, id=DOT_SWITCH)
+        self.Bind(wx.EVT_MENU, self.RectSwitch, id=RECT_SWITCH)
 
         # menu 4 - pen color and cursor control tools
         markerctrlmenu.Append(RECTSIZE_SET, "Change box size",
@@ -151,16 +183,19 @@ class CellCounter(wx.Frame):
         markerctrlmenu.Append(CROSSLONG_SET, "Change cross length",
                               "Change length of cursor lines")
         
+        self.Bind(wx.EVT_MENU, self.RectSizeSet, id=RECTSIZE_SET)
+        self.Bind(wx.EVT_MENU, self.CrossWideSet, id=CROSSWIDE_SET)
+        self.Bind(wx.EVT_MENU, self.CrossLongSet, id=CROSSLONG_SET)
+        
         # menu 5 - movement and macro view menu
         imagectrlmenu.Append(IMAGEMOVE_ON, "Move Image", 
-                             """
-                             Turn on image move mode and turn off marking,
-                             to move the image, click and hold and move mouse
-                             """)
-        # currently non-functional
-        imagectrlmenu.Append(MACRO_SHOW,"Macro View",
-                             "Turn macroview off and on")
-
+                             "Turn on image move mode and turn off marking")
+        imagectrlmenu.Append(IMAGEMOVE_OFF, "Mark Objects",
+                             "Turn on marking and turn off image move")
+        
+        self.Bind(wx.EVT_MENU, self.ImageMoveOn, id=IMAGEMOVE_ON)
+        self.Bind(wx.EVT_MENU, self.ImageMoveOff, id=IMAGEMOVE_OFF)
+        
         # menu headers
         menubar.Append(filemenu, "File")
         menubar.Append(popselectmenu, "Select Pop")
@@ -168,37 +203,7 @@ class CellCounter(wx.Frame):
         menubar.Append(markerctrlmenu, "Change Markers")
         menubar.Append(imagectrlmenu, "Move Image")
         self.SetMenuBar(menubar)
-        
-        # assign menu functions
-        # menu 1
-        self.Bind(wx.EVT_MENU, self.ScaledImageOpen, id=FILE_SCALED_OPEN)
-        self.Bind(wx.EVT_MENU, self.UnscaledImageOpen, id=FILE_UNSCALED_OPEN)
-        self.Bind(wx.EVT_MENU, self.ExportMat, id=EXPORT_MAT)
-        self.Bind(wx.EVT_MENU, self.ExportMatNeuron, id=EXPORT_MAT_NEURON)
-        self.Bind(wx.EVT_MENU, self.ExportMatGlia, id=EXPORT_MAT_GLIA)
-        self.Bind(wx.EVT_MENU, self.ExportMatBV, id=EXPORT_MAT_BV)
-        self.Bind(wx.EVT_MENU, self.ImportMat, id=IMPORT_MAT)
-
-        # menu 2
-        self.Bind(wx.EVT_MENU, self.NeuronButton, id=NEURON_SELECT)
-        self.Bind(wx.EVT_MENU, self.GliaButton, id=GLIA_SELECT)
-        self.Bind(wx.EVT_MENU, self.BVButton, id=BV_SELECT)
-
-        # menu 3
-        self.Bind(wx.EVT_MENU, self.ImageMoveOff, id=IMAGEMOVE_OFF)
-        self.Bind(wx.EVT_MENU, self.DotSwitch, id=DOT_SWITCH)
-        self.Bind(wx.EVT_MENU, self.RectSwitch, id=RECT_SWITCH)
-
-        # menu 4
-        self.Bind(wx.EVT_MENU, self.RectSizeSet, id=RECTSIZE_SET)
-        self.Bind(wx.EVT_MENU, self.CrossWideSet, id=CROSSWIDE_SET)
-        self.Bind(wx.EVT_MENU, self.CrossLongSet, id=CROSSLONG_SET)
-
-        # menu 5
-        self.Bind(wx.EVT_MENU, self.ImageMoveOn, id=IMAGEMOVE_ON)
-        self.Bind(wx.EVT_MENU, self.MacroShow, id=MACRO_SHOW)
-
-        
+              
         # mouseclick setup - default is rectangle counting mode
         self.Bind(wx.EVT_LEFT_DOWN, self.DrawRect)
         self.Bind(wx.EVT_RIGHT_DOWN, self.EraseRect)
@@ -217,6 +222,10 @@ class CellCounter(wx.Frame):
         dc = wx.BufferedDC(wx.ClientDC(self), self.buffer)
         dc.Clear() # black window otherwise
         dc.SetPen(wx.Pen(pencolor, 2, wx.SOLID))
+
+
+##############################################################################
+# functions for program below this point
 
     def ScaledImageOpen(self, event):
         global scalebmpwidth
@@ -255,7 +264,7 @@ class CellCounter(wx.Frame):
         unscaled_image = False
         self.Refresh()
 
-    def UnscaledImageOpen(self,event):
+    def UnscaledImageOpen(self, event):
         global scalebmpwidth
         global scalebmpheight
         global unscaled_image
@@ -289,7 +298,7 @@ class CellCounter(wx.Frame):
         unscaled_image = True
         self.Refresh()
         
-    def DrawRect(self,event):
+    def DrawRect(self, event):
         global cellrecord
         global cellrecordscaled
         global cellcounter
@@ -425,8 +434,8 @@ class CellCounter(wx.Frame):
         dc.DrawLine(x1 - (crosslong / 2), y1, x1 + (crosslong / 2), y1)
         dc.DrawLine(x1, y1 - (crosslong / 2), x1, y1 + (crosslong / 2))
         self.Update()
-        celladddot=np.array([x1, y1, celltype])
-        cellrecorddot=np.vstack((cellrecorddot, celladddot))            
+        celladddot = np.array([x1, y1, celltype])
+        cellrecorddot = np.vstack((cellrecorddot, celladddot))            
         # Return coords to original image scale for output 
         # if image has been rescaled.
         if unscaled_image:
@@ -639,7 +648,7 @@ class CellCounter(wx.Frame):
                              appendmat=True)
 
         # export dot tracings
-        checkcounteddot=np.ndim(cellrecorddotscaled)
+        checkcounteddot = np.ndim(cellrecorddotscaled)
         if checkcounteddot == 1:
             pass
         else:
@@ -650,7 +659,7 @@ class CellCounter(wx.Frame):
     def ExportMatNeuron(self, event):
         global cellrecord
         
-        self.saveTxt = wx.TextCtrl(self, size=(200,-1))
+        self.saveTxt = wx.TextCtrl(self, size=(200, -1))
         dialog = wx.FileDialog(None, "Enter", style=wx.FD_SAVE)
         if dialog.ShowModal() == wx.ID_OK:
             self.saveTxt.SetValue(dialog.GetPath())
@@ -665,9 +674,9 @@ class CellCounter(wx.Frame):
         else:
             checkcell = np.alen(cellrecordscaled)
             singlepass = 0
-            neuronarray = np.array([0,0,0,0])
+            neuronarray = np.array([0, 0, 0, 0])
             while singlepass < checkcell:
-                if np.array((cellrecordscaled[singlepass,4])) == 1:
+                if np.array((cellrecordscaled[singlepass, 4])) == 1:
                     neuronadd = np.array((cellrecordscaled[singlepass, 0:4]))
                     neuronarray = np.vstack((neuronarray, neuronadd))
                 singlepass += 1
@@ -782,7 +791,7 @@ class CellCounter(wx.Frame):
             scipy.io.savemat(path, mdict={'cellpointexport': cellpointexport}, 
                              appendmat=True)
 
-    def ImportMat(self,event):
+    def ImportMat(self, event):
         global cellrecordscaled
         global cellrecorddotscaled
         global cellrecord
@@ -958,38 +967,31 @@ class CellCounter(wx.Frame):
                     drawcounter += 1
 
         self.Update() 
-
-                        
+                   
     def RectSwitch(self, event):
         global drawtype
         self.Bind(wx.EVT_LEFT_DOWN, self.DrawRect)
         self.Bind(wx.EVT_RIGHT_DOWN, self.EraseRect)
-        drawtype=1
-
-
+        drawtype = 1
+        
     def DotSwitch(self, event):
         global drawtype
         self.Bind(wx.EVT_LEFT_DOWN, self.DrawDot)
         self.Bind(wx.EVT_RIGHT_DOWN, self.EraseDot)
-        drawtype=2
-
+        drawtype = 2
 
     def ImageMoveOn(self, event):
-        self.Bind(wx.EVT_LEFT_DOWN, self.MouseMove)
-
+        global unscaled_image
+        if unscaled_image:
+            self.Bind(wx.EVT_LEFT_DOWN, self.MouseMove)
 
     def ImageMoveOff(self, event):
+        global drawtype
         if drawtype == 1:
             self.Bind(wx.EVT_LEFT_DOWN, self.DrawRect)
         if drawtype == 2:
             self.Bind(wx.EVT_LEFT_DOWN, self.DrawDot)
         self.Bind(wx.EVT_LEFT_UP, self.does_nothing)
-
-
-    def MacroShow(self, event):
-        # The target of this function is UNFINISHED
-        MacroFrame(None, (300,300)).Show()
-
 
     def RectSizeSet(self, event):
         global rectwide
@@ -1005,7 +1007,6 @@ class CellCounter(wx.Frame):
         else:
             pass
         
-
     def CrossWideSet(self, event):
         global crosswide
 
@@ -1020,7 +1021,6 @@ class CellCounter(wx.Frame):
         else:
             pass
 
-
     def CrossLongSet(self, event):
         global crosslong
 
@@ -1034,32 +1034,15 @@ class CellCounter(wx.Frame):
             crosslong = int(inputcapture.GetValue())
         else:
             pass
-
         
     def create_crosshair(self, event):
         self.SetCursor(wx.StockCursor(wx.CURSOR_CROSS))
 
-
     def does_nothing(self, event):
         pass
 
-
     def on_paint(self, event):
         wx.BufferedPaintDC(self, self.buffer)
-
-
-# This class is UNFINISHED
-class MacroFrame(wx.Frame):
-    def __init__(self, parent, mysize):
-        wx.Frame.__init__(self, parent, wx.ID_ANY, size=mysize, 
-                          title="MacroFrame Alpha - currently non-functional")
-        
-        # create menu, statusbar
-        status = self.CreateStatusBar()
-        menubar = wx.MenuBar()
-        filemenu = wx.Menu()
-        popselectmenu = wx.Menu()
-        countselectmenu = wx.Menu()
 
 
 app = wx.App()
@@ -1067,5 +1050,4 @@ screensize = wx.GetDisplaySize()
 width = screensize[0]
 height = screensize[1]*.95
 CellCounter(None, (width, height)).Show()
-# MacroFrame(None, (300, 300)).Show()
 app.MainLoop()
