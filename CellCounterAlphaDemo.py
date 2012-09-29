@@ -1,5 +1,5 @@
 # This program is written for Python 2.6-2.7.
-# It requires the libraries wxpython, numpy, and scipy.
+# It requires the wxpython library
 # It allows the user to load an image and mark the coordinates of objects
 # (cells for my uses), as well as moving the image around using click and 
 # drag. The coordinates of cells in the image can then be saved.
@@ -13,8 +13,6 @@
 # Current todo:
 # Reduce dependence on global variables.
 # Break things up into more component parts.
-# Save to .txt and not .mat, and remove the scipy dependency. 
-# Replace arrays with lists, and remove the numpy dependency.
 # Fix whitespace on side of screen on high resolution monitors
 # Add full documentation so someone besides me can use it.
 
@@ -24,21 +22,11 @@
 
 ############################################################################## 
 # These are program variables to be manipulated by a slightly savvy user.
-# Eventually, many will be accessible from gui.
+# Some day, I would like to make them more easily manipulated via the GUI.
 
-# Drawing object parameters.
-# UNFINISHED these are not yet changeable and are set as defaults in the code
-rectwide = 1
-crosswide = 1
-crosslong = 15
-
-# Set pen colors. 
-# UNFINISHED will add menu to chg later
-pencolor = ("BLACK")
-pencolor0 = "BLACK"
-pencolor1 = "BLUE"
-pencolor2 = "GREEN"
-pencolor3 = "PURPLE"
+# Library imports
+import wx
+import csv
 
 # Determine whether image being studied is scaled
 # This is used for achieving consistent output between scaled and unscaled 
@@ -47,34 +35,38 @@ pencolor3 = "PURPLE"
 # most common format
 unscaled_image = False
 
-# Default celltype is none (type 0).
-# When the user selects cell types, it will change.
+# Default cell type is none (type 0).
 # Neuron = 1, glia = 2, blood vessel cell = 3.
-celltype = 0
-
-# Starting cell number, used to locate counting records
-cellcounter = 0
+cell_type = 0
 
 # Drawing mode. The default, 1, is boxes
 # Switch to point drawing using the menu system
-drawtype = 1
+draw_type = 1
 
-# Set default image size very small so it works with most screens
-scalebmpwidth = 640
-scalebmpheight = 480
+# Set default scaled image size very small so it works with most screens
+# I will be looking into libraries to get the current screen resolution
+scale_bmp_width = 640
+scale_bmp_height = 480
 
-# Library imports
-import wx
-import numpy as np
-import scipy.io
-import textwrap
+# Default drawing object parameters.
+rect_line_width = 1
+cross_width = 1
+cross_length = 15
+
+# Set pen colors. 
+pen_color = ("BLACK")
+pen_color_0 = "BLACK"
+pen_color_1 = "BLUE"
+pen_color_2 = "GREEN"
+pen_color_3 = "PURPLE"
+
+# Starting cell number, used to locate counting records
+cell_counter = 0
 
 # All arrays used have a blank header line because I found it easiest with my 
 # limited Python skills when I wrote this - DO NOT CHANGE
-cellrecord = np.array([0, 0, 0, 0, 0])
-cellrecordscaled = np.array([0, 0, 0, 0, 0])
-cellrecorddot = np.array([0, 0, 0])
-cellrecorddotscaled = np.array([0, 0, 0])
+cell_record, cell_record_scale = [], []
+cell_record_pt, cell_record_pt_scale = [], []
 
 ##############################################################################
 
@@ -84,31 +76,31 @@ class CellCounter(wx.Frame):
     def __init__(self, parent, mysize):
         wx.Frame.__init__(self, parent, wx.ID_ANY, size=mysize, 
                           title="Cell Counter Alpha")
-        # Matrices for adding locations
+        # Used to add locations
         self.points = []
         self.scaledpoints = []
-        markercount = 0
   
 ##############################################################################
 # menu setup
         
         # create menu, statusbar
         status = self.CreateStatusBar()
-        menubar = wx.MenuBar()
-        filemenu = wx.Menu()
-        popselectmenu = wx.Menu()
-        countselectmenu = wx.Menu()
-        imagectrlmenu = wx.Menu()
-        markerctrlmenu = wx.Menu()
+        menu_bar = wx.MenuBar()
+        file_menu = wx.Menu()
+        cell_type_select_menu = wx.Menu()
+        count_select_menu = wx.Menu()
+        marker_ctrl_menu = wx.Menu()
+        image_ctrl_menu = wx.Menu()
+        
 
         # assign first menu values
         FILE_SCALED_OPEN = 101
         FILE_UNSCALED_OPEN = 102
-        EXPORT_MAT = 103
-        EXPORT_MAT_NEURON = 104
-        EXPORT_MAT_GLIA = 105
-        EXPORT_MAT_BV = 106
-        IMPORT_MAT = 107
+        EXPORT_TXT_ALL = 103
+        EXPORT_TXT_NEURON = 104
+        EXPORT_TXT_GLIA = 105
+        EXPORT_TXT_BV = 106
+        IMPORT_TXT = 107
 
         # assign second menu values
         NEURON_SELECT = 201
@@ -119,47 +111,47 @@ class CellCounter(wx.Frame):
         DOT_SWITCH = 301
         RECT_SWITCH = 302
 
-        # assign fifth menu values
+        # assign fourth menu values
         RECTSIZE_SET = 401
         CROSSWIDE_SET = 402
         CROSSLONG_SET = 403
 
-        # assign fourth menu values
+        # assign fifth menu values
         IMAGEMOVE_ON = 501
         IMAGEMOVE_OFF = 502
 
         # create menu contents
         # menu 1 - file handling menu
-        filemenu.Append(FILE_SCALED_OPEN, "Open Scaled Image",
+        file_menu.Append(FILE_SCALED_OPEN, "Open Scaled Image",
                         "Open an image file and scale it")
-        filemenu.Append(FILE_UNSCALED_OPEN, "Open Unscaled Image",
+        file_menu.Append(FILE_UNSCALED_OPEN, "Open Unscaled Image",
                         "Open an image file without scaling")
-        filemenu.Append(EXPORT_MAT, "Export whole .mat",
-                        "Export a .mat file containing all cell types")
-        filemenu.Append(EXPORT_MAT_NEURON, "Export Neuron .mat",
-                        "Export .mat file containing neuronal data")
-        filemenu.Append(EXPORT_MAT_GLIA, "Export Glia .mat",
-                        "Export .mat file containing glial data")
-        filemenu.Append(EXPORT_MAT_BV, "Export BV .mat",
-                        "Export .mat file containing blood vessel cell data")
-        filemenu.Append(IMPORT_MAT, "Import tracing from .mat",
-                        "Import .mat file")
+        file_menu.Append(EXPORT_TXT_ALL, "Export all data",
+                        "Export tab-delimited .txt file with all data")
+        file_menu.Append(EXPORT_TXT_NEURON, "Export neuron data",
+                        "Export tab-delimited .txt file with neuronal data")
+        file_menu.Append(EXPORT_TXT_GLIA, "Export glia data",
+                        "Export tab-delimited .txt file with glial data")
+        file_menu.Append(EXPORT_TXT_BV, "Export BV data",
+                        "Export tab-delimited .txt file with bv cell data")
+        file_menu.Append(IMPORT_TXT, "Import tracing from .txt",
+                        "Import .txt file")
         
         self.Bind(wx.EVT_MENU, self.ScaledImageOpen, id=FILE_SCALED_OPEN)
         self.Bind(wx.EVT_MENU, self.UnscaledImageOpen, id=FILE_UNSCALED_OPEN)
-        self.Bind(wx.EVT_MENU, self.ExportMat, id=EXPORT_MAT)
-        self.Bind(wx.EVT_MENU, self.ExportMatNeuron, id=EXPORT_MAT_NEURON)
-        self.Bind(wx.EVT_MENU, self.ExportMatGlia, id=EXPORT_MAT_GLIA)
-        self.Bind(wx.EVT_MENU, self.ExportMatBV, id=EXPORT_MAT_BV)
-        self.Bind(wx.EVT_MENU, self.ImportMat, id=IMPORT_MAT)
+        self.Bind(wx.EVT_MENU, self.ExportTxtAll, id=EXPORT_TXT_ALL)
+        self.Bind(wx.EVT_MENU, self.ExportTxtNeuron, id=EXPORT_TXT_NEURON)
+        self.Bind(wx.EVT_MENU, self.ExportTxtGlia, id=EXPORT_TXT_GLIA)
+        self.Bind(wx.EVT_MENU, self.ExportTxtBV, id=EXPORT_TXT_BV)
+        self.Bind(wx.EVT_MENU, self.ImportTxt, id=IMPORT_TXT)
 
 
         # menu 2 - counting target selection menu
-        popselectmenu.Append(NEURON_SELECT, "Neurons",
+        cell_type_select_menu.Append(NEURON_SELECT, "Neurons",
                              "Mark neurons")
-        popselectmenu.Append(GLIA_SELECT, "Glia", 
+        cell_type_select_menu.Append(GLIA_SELECT, "Glia", 
                              "Mark glia")
-        popselectmenu.Append(BV_SELECT, "Blood Vessel",
+        cell_type_select_menu.Append(BV_SELECT, "Blood Vessel",
                              "Mark blood vessel cells")
         
         self.Bind(wx.EVT_MENU, self.NeuronButton, id=NEURON_SELECT)
@@ -167,20 +159,20 @@ class CellCounter(wx.Frame):
         self.Bind(wx.EVT_MENU, self.BVButton, id=BV_SELECT)
 
         # menu 3 - counting methods menu
-        countselectmenu.Append(DOT_SWITCH, "Point Mode",
+        count_select_menu.Append(DOT_SWITCH, "Point Mode",
                                "Mark objects with a single point")
-        countselectmenu.Append(RECT_SWITCH, "Rect Mode",
+        count_select_menu.Append(RECT_SWITCH, "Rect Mode",
                                "Mark objects with a surrounding box")
         
         self.Bind(wx.EVT_MENU, self.DotSwitch, id=DOT_SWITCH)
         self.Bind(wx.EVT_MENU, self.RectSwitch, id=RECT_SWITCH)
 
         # menu 4 - pen color and cursor control tools
-        markerctrlmenu.Append(RECTSIZE_SET, "Change box size",
+        marker_ctrl_menu.Append(RECTSIZE_SET, "Change box size",
                               "Change thickness of tracing lines")
-        markerctrlmenu.Append(CROSSWIDE_SET,"Change cross width",
+        marker_ctrl_menu.Append(CROSSWIDE_SET,"Change cross width",
                               "Change thickness of cursor lines")
-        markerctrlmenu.Append(CROSSLONG_SET, "Change cross length",
+        marker_ctrl_menu.Append(CROSSLONG_SET, "Change cross length",
                               "Change length of cursor lines")
         
         self.Bind(wx.EVT_MENU, self.RectSizeSet, id=RECTSIZE_SET)
@@ -188,21 +180,21 @@ class CellCounter(wx.Frame):
         self.Bind(wx.EVT_MENU, self.CrossLongSet, id=CROSSLONG_SET)
         
         # menu 5 - movement and macro view menu
-        imagectrlmenu.Append(IMAGEMOVE_ON, "Move Image", 
+        image_ctrl_menu.Append(IMAGEMOVE_ON, "Move Image", 
                              "Turn on image move mode and turn off marking")
-        imagectrlmenu.Append(IMAGEMOVE_OFF, "Mark Objects",
+        image_ctrl_menu.Append(IMAGEMOVE_OFF, "Mark Objects",
                              "Turn on marking and turn off image move")
         
         self.Bind(wx.EVT_MENU, self.ImageMoveOn, id=IMAGEMOVE_ON)
         self.Bind(wx.EVT_MENU, self.ImageMoveOff, id=IMAGEMOVE_OFF)
         
         # menu headers
-        menubar.Append(filemenu, "File")
-        menubar.Append(popselectmenu, "Select Pop")
-        menubar.Append(countselectmenu, "Count Objects")
-        menubar.Append(markerctrlmenu, "Change Markers")
-        menubar.Append(imagectrlmenu, "Move Image")
-        self.SetMenuBar(menubar)
+        menu_bar.Append(file_menu, "File")
+        menu_bar.Append(cell_type_select_menu, "Select Pop")
+        menu_bar.Append(count_select_menu, "Count Objects")
+        menu_bar.Append(marker_ctrl_menu, "Change Markers")
+        menu_bar.Append(image_ctrl_menu, "Move Image")
+        self.SetMenuBar(menu_bar)
               
         # mouseclick setup - default is rectangle counting mode
         self.Bind(wx.EVT_LEFT_DOWN, self.DrawRect)
@@ -210,7 +202,7 @@ class CellCounter(wx.Frame):
         self.Bind(wx.EVT_PAINT, self.on_paint)
         self.Bind(wx.EVT_ENTER_WINDOW, self.create_crosshair)
 
-        # keyboard setup for fast celltype switching
+        # keyboard setup for fast cell type switching
         self.Bind(wx.EVT_KEY_DOWN, self.OnKeyDown)
 
         # load default frame
@@ -218,20 +210,20 @@ class CellCounter(wx.Frame):
         self.Centre()
         self.Show(True)
         self.buffer = wx.EmptyBitmap(1600, 1200) # draw to this
-        imagebuffer = wx.EmptyBitmap(1600, 1200) # spare for image repair/move
+        image_buffer = wx.EmptyBitmap(1600, 1200) # for image repair/move
         dc = wx.BufferedDC(wx.ClientDC(self), self.buffer)
         dc.Clear() # black window otherwise
-        dc.SetPen(wx.Pen(pencolor, 2, wx.SOLID))
+        dc.SetPen(wx.Pen(pen_color, 2, wx.SOLID))
 
 
 ##############################################################################
 # functions for program below this point
 
     def ScaledImageOpen(self, event):
-        global scalebmpwidth
-        global scalebmpheight
+        global scale_bmp_width
+        global scale_bmp_height
         global unscaled_image
-        global imagebuffer
+        global image_buffer
         
         self.photoTxt = wx.TextCtrl(self, size=(200,-1))
         wildcard = "JPEG files (*.jpg)|*.jpg"
@@ -246,30 +238,30 @@ class CellCounter(wx.Frame):
         
         bmp=wx.Image(path, wx.BITMAP_TYPE_ANY)
         # this is the wxPython drawing surface/canvas
-        scalebmpwidth = float(bmp.GetWidth())
-        scalebmpheight = float(bmp.GetHeight())
-        bmpscale = bmp.Scale(scalebmpwidth / scalebmpheight * screensize[1] *
-                            .80,screensize[1] * .80)
-        bmp2 = wx.BitmapFromImage(bmpscale)
-        imagebuffer = wx.EmptyBitmap(scalebmpwidth / scalebmpheight * 
-                                     screensize[1] * .80,
-                                     screensize[1]*.80)
-        dc2 = wx.BufferedDC(wx.MemoryDC(), imagebuffer)
+        scale_bmp_width = float(bmp.GetWidth())
+        scale_bmp_height = float(bmp.GetHeight())
+        bmp_scale = bmp.Scale(scale_bmp_width / scale_bmp_height * 
+                              screen_size[1] * .80,screen_size[1] * .80)
+        bmp2 = wx.BitmapFromImage(bmp_scale)
+        image_buffer = wx.EmptyBitmap(scale_bmp_width / scale_bmp_height * 
+                                     screen_size[1] * .80,
+                                     screen_size[1]*.80)
+        dc2 = wx.BufferedDC(wx.MemoryDC(), image_buffer)
         dc2.DrawBitmap(bmp2, 0, 0, True)
-        self.buffer = wx.EmptyBitmap(scalebmpwidth / scalebmpheight * 
-                                     screensize[1] * .80,
-                                     screensize[1] * .80)
+        self.buffer = wx.EmptyBitmap(scale_bmp_width / scale_bmp_height * 
+                                     screen_size[1] * .80,
+                                     screen_size[1] * .80)
         dc = wx.BufferedDC(wx.ClientDC(self), self.buffer)
         dc.DrawBitmap(bmp2, 0, 0, True)
         unscaled_image = False
         self.Refresh()
 
     def UnscaledImageOpen(self, event):
-        global scalebmpwidth
-        global scalebmpheight
+        global scale_bmp_width
+        global scale_bmp_height
         global unscaled_image
-        global currentlocation
-        global imagebuffer
+        global current_loc
+        global image_buffer
         
         self.photoTxt = wx.TextCtrl(self, size=(200,-1))
         wildcard = "JPEG files (*.jpg)|*.jpg"
@@ -283,36 +275,36 @@ class CellCounter(wx.Frame):
         self.photoTxt.Destroy()
         
         bmp=wx.Image(path, wx.BITMAP_TYPE_ANY)
-        scalebmpwidth = float(bmp.GetWidth())
-        scalebmpheight = float(bmp.GetHeight())
+        scale_bmp_width = float(bmp.GetWidth())
+        scale_bmp_height = float(bmp.GetHeight())
         bmp2 = wx.BitmapFromImage(bmp)
-        imagebuffer = wx.EmptyBitmap(scalebmpwidth, scalebmpheight)
-        dc2 = wx.BufferedDC(wx.MemoryDC(), imagebuffer)
+        image_buffer = wx.EmptyBitmap(scale_bmp_width, scale_bmp_height)
+        dc2 = wx.BufferedDC(wx.MemoryDC(), image_buffer)
         dc2.DrawBitmap(bmp2, 0, 0, True)
-        self.buffer = wx.EmptyBitmap(scalebmpwidth,scalebmpheight)
+        self.buffer = wx.EmptyBitmap(scale_bmp_width,scale_bmp_height)
         dc = wx.BufferedDC(wx.ClientDC(self), self.buffer)
         dc.DrawBitmap(bmp2, 0, 0, True)
 
         #upper left coordinates of picture
-        currentlocation = [0,0]
+        current_loc = [0,0]
         unscaled_image = True
         self.Refresh()
         
     def DrawRect(self, event):
-        global cellrecord
-        global cellrecordscaled
-        global cellcounter
+        global cell_record
+        global cell_record_scale
+        global cell_counter
         
         self.points.append(event.GetPosition())
         x1, y1 = self.points[0]
         if len(self.points) == 1:
             dc = wx.BufferedDC(wx.ClientDC(self), self.buffer)
-            dc.SetPen(wx.Pen(pencolor, rectwide, wx.SOLID))
+            dc.SetPen(wx.Pen(pen_color, rect_line_width, wx.SOLID))
             dc.DrawLine(x1, y1, (x1 + 1), (y1 + 1))
             self.Update()
         if len(self.points) == 2:
             dc = wx.BufferedDC(wx.ClientDC(self), self.buffer)
-            dc.SetPen(wx.Pen(pencolor, rectwide, wx.SOLID))
+            dc.SetPen(wx.Pen(pen_color, rect_line_width, wx.SOLID))
             x1, y1 = self.points[0]
             x2, y2 = self.points[1]
             dc.DrawLine(x1, y1, x1, y2)
@@ -320,240 +312,249 @@ class CellCounter(wx.Frame):
             dc.DrawLine(x2, y2, x2, y1)
             dc.DrawLine(x2, y1, x1, y1)
             self.Update()
-            celladd = np.array([x1, y1, x2, y2, celltype])
-            cellrecord = np.vstack((cellrecord, celladd))
+            celladd = [x1, y1, x2, y2, cell_type]
+            if not cell_record:
+                cell_record = []
+            cell_record.append(celladd)
             
-            # return coords to original image scale for output if image has been 
-            # rescaled
+            # return coords to original image scale for output if image has 
+            # been rescaled
             if unscaled_image:
-                x1scaled = x1 + currentlocation[0]
-                y1scaled = y1 + currentlocation[1]
-                x2scaled = x2 + currentlocation[0]
-                y2scaled = y2 + currentlocation[1]
+                x1scaled = x1 + current_loc[0]
+                y1scaled = y1 + current_loc[1]
+                x2scaled = x2 + current_loc[0]
+                y2scaled = y2 + current_loc[1]
                 
             if not unscaled_image:
-                x1scaled = int(x1 * scalebmpwidth / 
-                              (scalebmpwidth / scalebmpheight * 
-                               screensize[1] * .80))
-                y1scaled = int(y1 * scalebmpheight /(screensize[1] * .80))
-                x2scaled = int(x2 * scalebmpwidth /(scalebmpwidth / 
-                                                    scalebmpheight * 
-                                                    screensize[1] * .80))
-                y2scaled = int(y2 * scalebmpheight /(screensize[1]*.80))
-
-            celladdscaled = np.array([x1scaled, y1scaled, x2scaled, y2scaled, 
-                                      celltype])
-            cellrecordscaled = np.vstack((cellrecordscaled, celladdscaled))
-            print cellrecordscaled
-            print cellrecord
-            cellcounter += 1
+                x1scaled = int(x1 * scale_bmp_width / 
+                              (scale_bmp_width / scale_bmp_height * 
+                               screen_size[1] * .80))
+                y1scaled = int(y1 * scale_bmp_height /(screen_size[1] * .80))
+                x2scaled = int(x2 * scale_bmp_width /(scale_bmp_width / 
+                                                    scale_bmp_height * 
+                                                    screen_size[1] * .80))
+                y2scaled = int(y2 * scale_bmp_height /(screen_size[1]*.80))
+    
+            cell_record_scale.append([x1scaled, y1scaled, x2scaled, y2scaled, 
+                                      cell_type])
+            print cell_record_scale
+            cell_counter += 1
             self.points = []
 
     def EraseRect(self, event):
-        global cellrecord
-        global cellcounter
-        global cellrecordscaled
+        global cell_record
+        global cell_counter
+        global cell_record_scale
 
         dc = wx.BufferedDC(wx.ClientDC(self), self.buffer)
-        dc2 = wx.BufferedDC(wx.MemoryDC(), imagebuffer)
+        dc2 = wx.BufferedDC(wx.MemoryDC(), image_buffer)
         
-        cutrow = np.alen(cellrecordscaled) - 1
+        cutrow = len(cell_record_scale) - 1
 
         if unscaled_image:
-            x1 = np.rint(cellrecordscaled[cutrow,0]) - currentlocation[0]
-            y1 = np.rint(cellrecordscaled[cutrow,1]) - currentlocation[1]
-            x2 = np.rint(cellrecordscaled[cutrow,2]) - currentlocation[0]
-            y2 = np.rint(cellrecordscaled[cutrow,3]) - currentlocation[1]
+            x1 = cell_record_scale[cutrow][0] - current_loc[0]
+            y1 = cell_record_scale[cutrow][1] - current_loc[1]
+            x2 = cell_record_scale[cutrow][2] - current_loc[0]
+            y2 = cell_record_scale[cutrow][3] - current_loc[1]
             
             #replace left side
-            dc.Blit(x1 - 1 - (rectwide / 2), y1 - 1 - (rectwide / 2), 
-                    (rectwide + 2), (y2 - y1) + 2 + rectwide,
-                    dc2, x1 - 1 - (rectwide / 2) + currentlocation[0], 
-                    y1 - 1 - rectwide / 2 + currentlocation[1],
+            dc.Blit(x1 - 1 - (rect_line_width / 2), 
+                    y1 - 1 - (rect_line_width / 2), (rect_line_width + 2), 
+                    (y2 - y1) + 2 + rect_line_width, dc2, 
+                    x1 - 1 - (rect_line_width / 2) + current_loc[0], 
+                    y1 - 1 - rect_line_width / 2 + current_loc[1],
                     rop=wx.COPY, useMask=False, xsrcMask=-1, ysrcMask=-1)
             #replace top side
-            dc.Blit(x1 - 1 - (rectwide / 2), y1 - 1 - (rectwide / 2), 
-                    (x2 - x1) + 2 + rectwide, (rectwide + 2),
-                    dc2, x1 - 1 - (rectwide / 2) + currentlocation[0], 
-                    y1 - 1 - (rectwide / 2) + currentlocation[1],
+            dc.Blit(x1 - 1 - (rect_line_width / 2), 
+                    y1 - 1 - (rect_line_width / 2), 
+                    (x2 - x1) + 2 + rect_line_width, (rect_line_width + 2),
+                    dc2, x1 - 1 - (rect_line_width / 2) + current_loc[0], 
+                    y1 - 1 - (rect_line_width / 2) + current_loc[1],
                     rop=wx.COPY, useMask=False, xsrcMask=-1, ysrcMask=-1)
             #replace right side
-            dc.Blit(x2 - 1 - (rectwide / 2), y1 - 1 - (rectwide / 2), 
-                    (rectwide + 2), (y2 - y1) + 2 + rectwide,
-                    dc2, x2 - 1 - (rectwide / 2) + currentlocation[0], 
-                    y1 - 1 - (rectwide / 2) + currentlocation[1],
+            dc.Blit(x2 - 1 - (rect_line_width / 2), 
+                    y1 - 1 - (rect_line_width / 2), (rect_line_width + 2), 
+                    (y2 - y1) + 2 + rect_line_width, dc2, 
+                    x2 - 1 - (rect_line_width / 2) + current_loc[0], 
+                    y1 - 1 - (rect_line_width / 2) + current_loc[1],
                     rop=wx.COPY, useMask=False, xsrcMask=-1, ysrcMask=-1)
             #replace bottom side
-            dc.Blit(x1 - 1 - (rectwide / 2), y2 - 1 - (rectwide / 2), 
-                    (x2 - x1) + 2 + rectwide, (rectwide + 2),
-                    dc2, x1 - 1 - (rectwide / 2) + currentlocation[0], 
-                    y2 - 1 - (rectwide / 2) + currentlocation[1],
+            dc.Blit(x1 - 1 - (rect_line_width / 2), 
+                    y2 - 1 - (rect_line_width / 2),
+                    (x2 - x1) + 2 + rect_line_width, (rect_line_width + 2),
+                    dc2, x1 - 1 - (rect_line_width / 2) + current_loc[0], 
+                    y2 - 1 - (rect_line_width / 2) + current_loc[1],
                     rop=wx.COPY, useMask=False, xsrcMask=-1, ysrcMask=-1)
             
         if not unscaled_image:
-            x1 = np.rint(cellrecord[cutrow,0])
-            y1 = np.rint(cellrecord[cutrow,1])
-            x2 = np.rint(cellrecord[cutrow,2])
-            y2 = np.rint(cellrecord[cutrow,3])
+            x1 = cell_record[cutrow][0]
+            y1 = cell_record[cutrow][1]
+            x2 = cell_record[cutrow][2]
+            y2 = cell_record[cutrow][3]
             
             #replace left side
-            dc.Blit(x1 - 1 - (rectwide / 2), y1 - 1 - (rectwide / 2), 
-                    (rectwide + 2), (y2 - y1) + 2 + rectwide,
-                    dc2, x1 - 1 - (rectwide / 2), y1 - 1 - (rectwide / 2),
+            dc.Blit(x1 - 1 - (rect_line_width / 2), 
+                    y1 - 1 - (rect_line_width / 2), (rect_line_width + 2), 
+                    (y2 - y1) + 2 + rect_line_width, dc2, 
+                    x1 - 1 - (rect_line_width / 2), 
+                    y1 - 1 - (rect_line_width / 2),
                     rop=wx.COPY, useMask=False, xsrcMask=-1, ysrcMask=-1)
             #replace top side
-            dc.Blit(x1 - 1 - (rectwide / 2), y1 - 1 - (rectwide / 2), 
-                    (x2 - x1) + 2 + rectwide, (rectwide + 2),
-                    dc2, x1 - 1 - (rectwide / 2), y1 - 1 - (rectwide / 2),
+            dc.Blit(x1 - 1 - (rect_line_width / 2), 
+                    y1 - 1 - (rect_line_width / 2), 
+                    (x2 - x1) + 2 + rect_line_width, 
+                    (rect_line_width + 2), dc2, 
+                    x1 - 1 - (rect_line_width / 2), 
+                    y1 - 1 - (rect_line_width / 2),
                     rop=wx.COPY, useMask=False, xsrcMask=-1, ysrcMask=-1)
             #replace right side
-            dc.Blit(x2 - 1 - (rectwide / 2), y1 - 1 - (rectwide / 2), 
-                    (rectwide + 2), (y2 - y1) + 2 + rectwide,
-                    dc2, x2 - 1 - (rectwide / 2), y1 - 1 - (rectwide / 2),
+            dc.Blit(x2 - 1 - (rect_line_width / 2), 
+                    y1 - 1 - (rect_line_width / 2), (rect_line_width + 2), 
+                    (y2 - y1) + 2 + rect_line_width, dc2, 
+                    x2 - 1 - (rect_line_width / 2), 
+                    y1 - 1 - (rect_line_width / 2),
                     rop=wx.COPY, useMask=False, xsrcMask=-1, ysrcMask=-1)
             #replace bottom side
-            dc.Blit(x1 - 1 - (rectwide / 2), y2 - 1 - (rectwide / 2), 
-                    (x2 - x1) + 2 + rectwide, (rectwide + 2),
-                    dc2, x1 - 1 - (rectwide / 2), y2 - 1 - (rectwide / 2),
+            dc.Blit(x1 - 1 - (rect_line_width / 2), 
+                    y2 - 1 - (rect_line_width / 2), 
+                    (x2 - x1) + 2 + rect_line_width, (rect_line_width + 2),
+                    dc2, x1 - 1 - (rect_line_width / 2), 
+                    y2 - 1 - (rect_line_width / 2),
                     rop=wx.COPY, useMask=False, xsrcMask=-1, ysrcMask=-1)
              
         self.Update()     
-        cellrecord = np.vstack((cellrecord[:cutrow]))
-        cellrecordscaled = np.vstack((cellrecordscaled[:cutrow]))
-        cellcounter -= 1
+        cell_record = cell_record[:-1]
+        cell_record_scale = cell_record_scale[:-1]
+        cell_counter -= 1
 
     def DrawDot(self, event):
-        global cellrecorddot
-        global cellrecorddotscaled
-        global cellcounter
+        global cell_record_pt
+        global cell_record_pt_scale
+        global cell_counter
         
         self.points.append(event.GetPosition())
         x1, y1 = self.points[0]
         dc = wx.BufferedDC(wx.ClientDC(self), self.buffer)
-        dc.SetPen(wx.Pen(pencolor, crosswide, wx.SOLID))
-        dc.DrawLine(x1 - (crosslong / 2), y1, x1 + (crosslong / 2), y1)
-        dc.DrawLine(x1, y1 - (crosslong / 2), x1, y1 + (crosslong / 2))
+        dc.SetPen(wx.Pen(pen_color, cross_width, wx.SOLID))
+        dc.DrawLine(x1 - (cross_length / 2), y1, x1 + (cross_length / 2), y1)
+        dc.DrawLine(x1, y1 - (cross_length / 2), x1, y1 + (cross_length / 2))
         self.Update()
-        celladddot = np.array([x1, y1, celltype])
-        cellrecorddot = np.vstack((cellrecorddot, celladddot))            
+        celladddot = [x1, y1, cell_type]
+        cell_record_pt.append(celladddot)            
         # Return coords to original image scale for output 
         # if image has been rescaled.
         if unscaled_image:
-            x1scaled = x1 + currentlocation[0]
-            y1scaled = y1 + currentlocation[1]
+            x1scaled = x1 + current_loc[0]
+            y1scaled = y1 + current_loc[1]
         if not unscaled_image:
-            x1scaled = int(x1 * scalebmpwidth / 
-                          (scalebmpwidth / 
-                           scalebmpheight * screensize[1] * .80))
-            y1scaled = int(y1 * scalebmpheight / (screensize[1]*.80))
+            x1scaled = int(x1 * scale_bmp_width / 
+                          (scale_bmp_width / 
+                           scale_bmp_height * screen_size[1] * .80))
+            y1scaled = int(y1 * scale_bmp_height / (screen_size[1]*.80))
 
-        celladddotscaled = np.array([x1scaled, y1scaled, celltype])
-        cellrecorddotscaled = np.vstack((cellrecorddotscaled, 
-                                         celladddotscaled))
-        print cellrecorddotscaled
-        print cellrecorddot
-        cellcounter += 1
+        cell_record_pt_scale.append([x1scaled, y1scaled, cell_type])
+        print cell_record_pt_scale
+        cell_counter += 1
         self.points = []
 
     def EraseDot(self, event):
-        global cellrecorddot
-        global cellrecorddotscaled
-        global cellcounter
+        global cell_record_pt
+        global cell_record_pt_scale
+        global cell_counter
 
         dc = wx.BufferedDC(wx.ClientDC(self), self.buffer)
-        dc2 = wx.BufferedDC(wx.MemoryDC(), imagebuffer)
+        dc2 = wx.BufferedDC(wx.MemoryDC(), image_buffer)
         
-        cutrow = np.alen(cellrecorddotscaled) - 1
-        if unscaled_image:
-            x1 = np.rint(cellrecorddotscaled[cutrow, 0])- currentlocation[0]
-            y1 = np.rint(cellrecorddotscaled[cutrow, 1])- currentlocation[1]
+        cutrow = len(cell_record_pt_scale) - 1
+        if unscaled_image and cell_record_pt_scale:
+            x1 = cell_record_pt_scale[cutrow][0] - current_loc[0]
+            y1 = cell_record_pt_scale[cutrow][1] - current_loc[1]
             # replace horizontal line
-            dc.Blit(x1 - 1 - (crosslong / 2), y1 - 1 - (crosswide / 2), 
-                    (crosslong + 2), (crosswide + 2),
-                    dc2, x1 - 1 - (crosslong / 2) + currentlocation[0],
-                    y1 - 1 - (crosswide / 2) + currentlocation[1],
+            dc.Blit(x1 - 1 - (cross_length / 2), y1 - 1 - (cross_width / 2), 
+                    (cross_length + 2), (cross_width + 2),
+                    dc2, x1 - 1 - (cross_length / 2) + current_loc[0],
+                    y1 - 1 - (cross_width / 2) + current_loc[1],
                     rop=wx.COPY, useMask=False, xsrcMask=-1, ysrcMask=-1)
             # replace vertical line
-            dc.Blit(x1 - 1 - (crosswide / 2), y1 - 1 - (crosslong / 2), 
-                    (crosswide + 2), (crosslong + 2),
-                    dc2, x1 - 1 - (crosswide / 2) + currentlocation[0], 
-                    y1 - 1 - (crosslong / 2) + currentlocation[1],
+            dc.Blit(x1 - 1 - (cross_width / 2), y1 - 1 - (cross_length / 2), 
+                    (cross_width + 2), (cross_length + 2),
+                    dc2, x1 - 1 - (cross_width / 2) + current_loc[0], 
+                    y1 - 1 - (cross_length / 2) + current_loc[1],
                     rop=wx.COPY, useMask=False, xsrcMask=-1, ysrcMask=-1)
             
-        if not unscaled_image:
-            x1 = np.rint(cellrecorddot[cutrow, 0])
-            y1 = np.rint(cellrecorddot[cutrow, 1])
+        if not unscaled_image and cell_record_pt_scale:
+            x1 = cell_record_pt[cutrow][0]
+            y1 = cell_record_pt[cutrow][1]
             # replace horizontal line
-            dc.Blit(x1 - 1 - (crosslong / 2), y1 - 1 - (crosswide / 2),
-                    (crosslong + 2), (crosswide + 2),
-                    dc2, x1 - (crosslong / 2), y1 - 1 - (crosswide / 2),
+            dc.Blit(x1 - 1 - (cross_length / 2), y1 - 1 - (cross_width / 2),
+                    (cross_length + 2), (cross_width + 2),
+                    dc2, x1 - (cross_length / 2), y1 - 1 - (cross_width / 2),
                     rop=wx.COPY, useMask=False, xsrcMask=-1, ysrcMask=-1)
             # replace vertical line
-            dc.Blit(x1 - 1 - (crosswide / 2), y1 - 1 - (crosslong / 2), 
-                    (crosswide + 2), (crosslong + 2),
-                    dc2, x1 - 1 - (crosswide / 2), y1 - 1 - (crosslong / 2),
+            dc.Blit(x1 - 1 - (cross_width / 2), y1 - 1 - (cross_length / 2), 
+                    (cross_width + 2), (cross_length + 2),
+                    dc2, x1 - 1 - (cross_width / 2), 
+                    y1 - 1 - (cross_length / 2),
                     rop=wx.COPY, useMask=False, xsrcMask=-1, ysrcMask=-1)
 
-        self.Update()     
-        cellrecorddot = np.vstack((cellrecorddot[:cutrow]))
-        cellrecorddotscaled = np.vstack((cellrecorddotscaled[:cutrow]))
-        cellcounter -= 1
+        self.Update()
+        if cell_record_pt and cell_record_pt_scale:     
+            cell_record_pt = cell_record_pt[:-1]
+            cell_record_pt_scale = cell_record_pt_scale[:-1]
+            cell_counter -= 1
 
     def MouseMove(self, event):
-        global selflocation
+        global self_loc
         
-        selflocation = []
-        selflocation.append(event.GetPosition())
+        self_loc = []
+        self_loc.append(event.GetPosition())
         self.Bind(wx.EVT_LEFT_UP, self.MouseStopRedraw)
 
     def MouseStopRedraw(self, event):
         # Note that this is only implemented for unscaled images!  
         # Scaled images fit on a single screen and don't require movement.
-        global selflocation
-        global currentlocation
-        global cellrecordscaled
-        global cellrecorddotscaled
-        global pencolor
+        global self_loc
+        global current_loc
+        global cell_record_scale
+        global cell_record_pt_scale
+        global pen_color
 
         # import current image (dc), full image stored in memory (dc2)
         dc = wx.BufferedDC(wx.ClientDC(self), self.buffer)
         dc.Clear()
-        dc2 = wx.BufferedDC(wx.MemoryDC(), imagebuffer)
+        dc2 = wx.BufferedDC(wx.MemoryDC(), image_buffer)
 
         # get location of movement
-        selflocation.append(event.GetPosition())
-        x1,y1 = selflocation[0]
-        x2,y2 = selflocation[1]
-        selflocation = []
-        currentlocation[0] = currentlocation[0] + (x1 - x2)
-        currentlocation[1] = currentlocation[1] + (y1 - y2)
+        self_loc.append(event.GetPosition())
+        x1,y1 = self_loc[0]
+        x2,y2 = self_loc[1]
+        self_loc = []
+        current_loc[0] = current_loc[0] + (x1 - x2)
+        current_loc[1] = current_loc[1] + (y1 - y2)
 
         # redraw the correct image
-        dc.Blit(0, 0, 1600, 1200, dc2, currentlocation[0], currentlocation[1],
+        dc.Blit(0, 0, 1600, 1200, dc2, current_loc[0], current_loc[1],
                 rop=wx.COPY, useMask=False, xsrcMask=-1, ysrcMask=-1)
 
         # move rectangle objects
-        checkcountedrect=np.ndim(cellrecordscaled) 
-        if checkcountedrect == 1:
-            pass
-        else:
-            length = np.alen(cellrecordscaled) - 1
-            retrace = 1
+        if len(cell_record_scale) > 0:
+            length = len(cell_record_scale) - 1
+            retrace = 0
             while retrace <= length:
-                x1 = np.array((cellrecordscaled[retrace,0])) - currentlocation[0]
-                y1 = np.array((cellrecordscaled[retrace,1])) - currentlocation[1]
-                x2 = np.array((cellrecordscaled[retrace,2])) - currentlocation[0]
-                y2 = np.array((cellrecordscaled[retrace,3])) - currentlocation[1]
-                celltype = np.array((cellrecordscaled[retrace,4]))
-                if celltype == 0:
-                    pencolor = pencolor0
-                if celltype == 1:
-                    pencolor = pencolor1
-                if celltype == 2:
-                    pencolor = pencolor2
-                if celltype == 3:
-                    pencolor = pencolor3
-                dc.SetPen(wx.Pen(pencolor, rectwide, wx.SOLID))
+                x1 = cell_record_scale[retrace][0] - current_loc[0]
+                y1 = cell_record_scale[retrace][1] - current_loc[1]
+                x2 = cell_record_scale[retrace][2] - current_loc[0]
+                y2 = cell_record_scale[retrace][3] - current_loc[1]
+                cell_type = cell_record_scale[retrace][4]
+                if cell_type == 0:
+                    pen_color = pen_color_0
+                if cell_type == 1:
+                    pen_color = pen_color_1
+                if cell_type == 2:
+                    pen_color = pen_color_2
+                if cell_type == 3:
+                    pen_color = pen_color_3
+                dc.SetPen(wx.Pen(pen_color, rect_line_width, wx.SOLID))
                 dc.DrawLine(x1, y1, x1, y2)
                 dc.DrawLine(x1, y2, x2, y2)
                 dc.DrawLine(x2, y2, x2, y1)
@@ -561,27 +562,26 @@ class CellCounter(wx.Frame):
                 retrace += 1
         
         # move dot objects
-        checkcounteddot=np.ndim(cellrecorddotscaled)
-        if checkcounteddot == 1:
-            pass
-        else:
-            length = np.alen(cellrecorddotscaled) - 1
-            retrace = 1
+        if len(cell_record_pt_scale) > 0:
+            length = len(cell_record_pt_scale) - 1
+            retrace = 0
             while retrace <= length:
-                x1 = np.array((cellrecorddotscaled[retrace,0])) - currentlocation[0]
-                y1 = np.array((cellrecorddotscaled[retrace,1])) - currentlocation[1]
-                celltype = np.array((cellrecorddotscaled[retrace,2]))
-                if celltype == 0:
-                    pencolor = pencolor0
-                if celltype == 1:
-                    pencolor = pencolor1
-                if celltype == 2:
-                    pencolor = pencolor2
-                if celltype == 3:
-                    pencolor = pencolor3
-                dc.SetPen(wx.Pen(pencolor, crosswide, wx.SOLID))
-                dc.DrawLine(x1- (crosslong / 2), y1, x1 + (crosslong / 2), y1)
-                dc.DrawLine(x1, y1 - (crosslong / 2), x1, y1 + (crosslong / 2))
+                x1 = cell_record_pt_scale[retrace][0] - current_loc[0]
+                y1 = cell_record_pt_scale[retrace][1] - current_loc[1]
+                cell_type = cell_record_pt_scale[retrace][2]
+                if cell_type == 0:
+                    pen_color = pen_color_0
+                if cell_type == 1:
+                    pen_color = pen_color_1
+                if cell_type == 2:
+                    pen_color = pen_color_2
+                if cell_type == 3:
+                    pen_color = pen_color_3
+                dc.SetPen(wx.Pen(pen_color, cross_width, wx.SOLID))
+                dc.DrawLine(x1- (cross_length / 2), y1, 
+                            x1 + (cross_length / 2), y1)
+                dc.DrawLine(x1, y1 - (cross_length / 2), x1, 
+                            y1 + (cross_length / 2))
                 retrace += 1
                 
         self.Update()
@@ -589,43 +589,43 @@ class CellCounter(wx.Frame):
         self.Bind(wx.EVT_LEFT_DOWN, self.MouseMove)
 
     def OnKeyDown(self, event):
-        global pencolor
-        global celltype
+        global pen_color
+        global cell_type
         code = event.GetKeyCode()
         if code == 49:
-            pencolor = ("BLUE")
-            celltype = 1
+            pen_color = ("BLUE")
+            cell_type = 1
         if code == 50:
-            pencolor = ("GREEN")
-            celltype = 2
+            pen_color = ("GREEN")
+            cell_type = 2
         if code == 51:
-            pencolor = ("PURPLE")
-            celltype = 3
+            pen_color = ("PURPLE")
+            cell_type = 3
         else:
             pass
         
     def NeuronButton(self, event):
-        global pencolor
-        global celltype
-        pencolor = ("BLUE")
-        celltype = 1
+        global pen_color
+        global cell_type
+        pen_color = ("BLUE")
+        cell_type = 1
 
     def GliaButton(self, event):
-        global pencolor
-        global celltype
-        pencolor = ("GREEN")
-        celltype = 2
+        global pen_color
+        global cell_type
+        pen_color = ("GREEN")
+        cell_type = 2
 
     def BVButton(self, event):
-        global pencolor
-        global celltype
-        pencolor = ("PURPLE")
-        celltype = 3
+        global pen_color
+        global cell_type
+        pen_color = ("PURPLE")
+        cell_type = 3
 
-    def ExportMat(self, event):
-        global cellrecord
-        global cellrecordscaled
-        global cellcounter
+    def ExportTxtAll(self, event):
+        global cell_record
+        global cell_record_scale
+        global cell_counter
         
         self.saveTxt = wx.TextCtrl(self, size=(200,-1))
         dialog = wx.FileDialog(None, "Enter", style=wx.SAVE)
@@ -636,28 +636,22 @@ class CellCounter(wx.Frame):
         self.saveTxt.Destroy()
 
         # Export rectangle tracing data. 
-        # Note that both dot and rect are currently saved to the same .mat 
-        # file as different variables, 
-        # cellexport and cellpointexport
-        checkcountedrect = np.ndim(cellrecordscaled)
-        if checkcountedrect == 1:
-            pass
-        else:
-            cellexport = np.vstack((cellrecordscaled[1:]))
-            scipy.io.savemat(path, mdict={'cellexport': cellexport}, 
-                             appendmat=True)
-
-        # export dot tracings
-        checkcounteddot = np.ndim(cellrecorddotscaled)
-        if checkcounteddot == 1:
-            pass
-        else:
-            cellpointexport=np.vstack((cellrecorddotscaled[1:]))
-            scipy.io.savemat(path, mdict={'cellpointexport': cellpointexport}, 
-                             appendmat=True)
+        if cell_record_scale:
+            output_writer = csv.writer(open(path, 'wb'), delimiter='\t', 
+                                       quotechar='|', 
+                                       quoting=csv.QUOTE_MINIMAL)
+            output_writer.writerow(["x1", "y1", "x2", "y2", "cell type"])
+            for row in cell_record_scale:
+                output_writer.writerow(row)
                 
-    def ExportMatNeuron(self, event):
-        global cellrecord
+        # Export dot tracing data.
+        if cell_record_pt_scale:
+            output_writer.writerow(["x1", "y1", "cell type"])
+            for row in cell_record_pt_scale:
+                output_writer.writerow(row)
+                
+    def ExportTxtNeuron(self, event):
+        global cell_record
         
         self.saveTxt = wx.TextCtrl(self, size=(200, -1))
         dialog = wx.FileDialog(None, "Enter", style=wx.FD_SAVE)
@@ -668,41 +662,25 @@ class CellCounter(wx.Frame):
         self.saveTxt.Destroy()
 
         # export rectangle tracings
-        checkcountedrect = np.ndim(cellrecordscaled)
-        if checkcountedrect == 1:
-            pass
-        else:
-            checkcell = np.alen(cellrecordscaled)
-            singlepass = 0
-            neuronarray = np.array([0, 0, 0, 0])
-            while singlepass < checkcell:
-                if np.array((cellrecordscaled[singlepass, 4])) == 1:
-                    neuronadd = np.array((cellrecordscaled[singlepass, 0:4]))
-                    neuronarray = np.vstack((neuronarray, neuronadd))
-                singlepass += 1
-            cellexport = np.vstack((neuronarray[1:]))
-            scipy.io.savemat(path, mdict={'cellexport': cellexport}, 
-                             appendmat=True)
-
+        if cell_record_scale:
+            output_writer = csv.writer(open(path, 'wb'), delimiter='\t', 
+                                       quotechar='|',
+                                       quoting=csv.QUOTE_MINIMAL)
+            output_writer.writerow(["x1", "y1", "x2", "y2"])
+            for row in cell_record_scale:
+                if row[4] == 1:
+                    output_writer.writerow(row)
+                    
         # export dot tracings
-        checkcounteddot = np.ndim(cellrecorddotscaled)
-        if checkcounteddot == 1:
-            pass
-        else:
-            checkcell = np.alen(cellrecorddotscaled)
-            singlepass = 0
-            neuronarray = np.array([0, 0])
-            while singlepass < checkcell:
-                if np.array((cellrecorddotscaled[singlepass, 2])) == 1:
-                    neuronadd = np.array((cellrecorddotscaled[singlepass, 0:2]))
-                    neuronarray = np.vstack((neuronarray, neuronadd))
-                singlepass += 1
-            cellpointexport = np.vstack((neuronarray[1:]))
-            scipy.io.savemat(path, mdict={'cellpointexport': cellpointexport}, 
-                             appendmat=True)
+        if cell_record_pt_scale:
+            output_writer.writerow(["x1", "y1", "cell type"])
+            for row in cell_record_pt_scale:
+                if row[2] == 1:
+                    output_writer.writerow(row)
+                
 
-    def ExportMatGlia(self, event):
-        global cellrecord
+    def ExportTxtGlia(self, event):
+        global cell_record
 
         self.saveTxt = wx.TextCtrl(self, size=(200,-1))
         dialog = wx.FileDialog(None, "Enter", style=wx.FD_SAVE)
@@ -713,41 +691,24 @@ class CellCounter(wx.Frame):
         self.saveTxt.Destroy()
 
         # export rectangle tracings
-        checkcountedrect = np.ndim(cellrecordscaled)
-        if checkcountedrect == 1:
-            pass
-        else:
-            checkcell = np.alen(cellrecordscaled)
-            singlepass = 0
-            gliaarray = np.array([0,0,0,0])
-            while singlepass < checkcell:
-                if np.array((cellrecordscaled[singlepass, 4])) == 2:
-                    gliaadd = np.array((cellrecordscaled[singlepass, 0:4]))
-                    gliaarray = np.vstack((gliaarray, gliaadd))
-                singlepass += 1
-            cellexport = np.vstack((gliaarray[1:]))
-            scipy.io.savemat(path, mdict={'cellexport': cellexport}, 
-                             appendmat=True)
-
+        if cell_record_scale:
+            output_writer = csv.writer(open(path, 'wb'), delimiter='\t', 
+                                       quotechar='|',
+                                       quoting=csv.QUOTE_MINIMAL)
+            output_writer.writerow(["x1", "y1", "x2", "y2"])
+            for row in cell_record_scale:
+                if row[4] == 2:
+                    output_writer.writerow(row)
+                    
         # export dot tracings
-        checkcounteddot = np.ndim(cellrecorddotscaled)
-        if checkcounteddot == 1:
-            pass
-        else:
-            checkcell = np.alen(cellrecorddotscaled)
-            singlepass = 0
-            gliaarray = np.array([0,0])
-            while singlepass < checkcell:
-                if np.array((cellrecorddotscaled[singlepass,2])) == 2:
-                    gliaadd = np.array((cellrecorddotscaled[singlepass,0:2]))
-                    gliaarray = np.vstack((gliaarray,gliaadd))
-                singlepass += 1
-            cellpointexport = np.vstack((gliaarray[1:]))
-            scipy.io.savemat(path, mdict={'cellpointexport': cellpointexport}, 
-                             appendmat=True)
-
-    def ExportMatBV(self, event):
-        global cellrecord
+        if cell_record_pt_scale:
+            output_writer.writerow(["x1", "y1", "cell type"])
+            for row in cell_record_pt_scale:
+                if row[2] == 2:
+                    output_writer.writerow(row)
+                    
+    def ExportTxtBV(self, event):
+        global cell_record
 
         self.saveTxt = wx.TextCtrl(self, size=(200,-1))
         dialog = wx.FileDialog(None, "Enter", style=wx.FD_SAVE)
@@ -758,47 +719,30 @@ class CellCounter(wx.Frame):
         self.saveTxt.Destroy()
 
         # export rectangle tracings
-        checkcountedrect = np.ndim(cellrecordscaled)
-        if checkcountedrect == 1:
-            pass
-        else:
-            checkcell = np.alen(cellrecordscaled)
-            singlepass = 0
-            bvarray = np.array([0,0,0,0])
-            while singlepass < checkcell:
-                if np.array((cellrecordscaled[singlepass, 4])) == 3:
-                    bvadd = np.array((cellrecordscaled[singlepass, 0:4]))
-                    bvarray = np.vstack((bvarray, bvadd))
-                singlepass += 1
-            cellexport = np.vstack((bvarray[1:]))
-            scipy.io.savemat(path, mdict={'cellexport': cellexport}, 
-                             appendmat=True)
-
+        if cell_record_scale:
+            output_writer = csv.writer(open(path, 'wb'), delimiter='\t', 
+                                       quotechar='|',
+                                       quoting=csv.QUOTE_MINIMAL)
+            output_writer.writerow(["x1", "y1", "x2", "y2"])
+            for row in cell_record_scale:
+                if row[4] == 3:
+                    output_writer.writerow(row)
+                    
         # export dot tracings
-        checkcounteddot = np.ndim(cellrecorddotscaled)
-        if checkcounteddot == 1:
-            pass
-        else:
-            checkcell = np.alen(cellrecorddotscaled)
-            singlepass = 0
-            bvarray = np.array([0, 0])
-            while singlepass < checkcell:
-                if np.array((cellrecorddotscaled[singlepass, 2])) == 3:
-                    bvadd = np.array((cellrecorddotscaled[singlepass, 0:2]))
-                    bvarray = np.vstack((bvarray, bvadd))
-                singlepass += 1
-            cellpointexport = np.vstack((bvarray[1:]))
-            scipy.io.savemat(path, mdict={'cellpointexport': cellpointexport}, 
-                             appendmat=True)
+        if cell_record_pt_scale:
+            output_writer.writerow(["x1", "y1", "cell type"])
+            for row in cell_record_pt_scale:
+                if row[2] == 3:
+                    output_writer.writerow(row)
 
-    def ImportMat(self, event):
-        global cellrecordscaled
-        global cellrecorddotscaled
-        global cellrecord
+    def ImportTxt(self, event):
+        global cell_record_scale
+        global cell_record_pt_scale
+        global cell_record
 
         # UNFINISHED need to clear image of current points
         dc = wx.BufferedDC(wx.ClientDC(self), self.buffer)
-        dc2 = wx.BufferedDC(wx.MemoryDC(), imagebuffer)
+        dc2 = wx.BufferedDC(wx.MemoryDC(), image_buffer)
         
         self.loadTxt = wx.TextCtrl(self, size=(200,-1))
         dialog = wx.FileDialog(None, "Enter", style=wx.OPEN)
@@ -807,55 +751,51 @@ class CellCounter(wx.Frame):
         dialog.Destroy()
         path = self.loadTxt.GetValue()
         self.loadTxt.Destroy()
-        rawimport = scipy.io.loadmat(path, mdict=None, appendmat=True)
-        print rawimport
+        raw_read = csv.reader(open(path, 'rb'), delimiter='\t', 
+                              quotechar='|',
+                              quoting=csv.QUOTE_MINIMAL)
+        raw_import = []
+        cell_record, cell_record_scale = [], []
+        cell_record_pt, cell_record_pt_scale = [], []
+        for row in raw_read:
+            for index, coord in enumerate(row):
+                try:
+                    row[index] = int(coord)
+                except:
+                    pass
+            if row[0] != 'x1':
+                if len(row) == 5:
+                    cell_record_scale.append(row)
+                if len(row) == 3:
+                    cell_record_pt_scale.append(row)
+        print raw_import
 
         # redraw a clean image
-        dc.Blit(0, 0, 1600, 1200, dc2, currentlocation[0], currentlocation[1],
+        dc.Blit(0, 0, 1600, 1200, dc2, current_loc[0], current_loc[1],
                 rop=wx.COPY, useMask=False, xsrcMask=-1, ysrcMask=-1)
 
-        try:
-            cellrecordappend = rawimport['cellexport']
-            rectdatatest = 1
-        except:
-            rectdatatest = 0
-        try:
-            cellrecorddotappend = rawimport['cellpointexport']
-            dotdatatest = 1
-        except:
-            dotdatatest = 0
-        
-        cellrecordscaled = np.array([0,0,0,0,0])
-        cellrecord = np.array([0,0,0,0,0])
-        cellrecorddotscaled = np.array([0,0,0])
-        cellrecorddot = np.array([0,0,0])
-
         # draw rectangle objects
-        if rectdatatest == 0:
-            pass
-        
-        else:
-            cellrecordscaled = np.vstack((cellrecordscaled, cellrecordappend))
-            cellnumber = np.alen(cellrecordscaled)
-            drawcounter = 1
+        if cell_record_scale:
+            cellnumber = len(cell_record_scale)
+            drawcounter = 0
             
             if unscaled_image:
-                cellrecord = cellrecordscaled
+                cell_record = cell_record_scale
                 while drawcounter < cellnumber:
-                    x1 = np.array((cellrecordscaled[drawcounter, 0])) - currentlocation[0]
-                    y1 = np.array((cellrecordscaled[drawcounter, 1])) - currentlocation[1]
-                    x2 = np.array((cellrecordscaled[drawcounter, 2])) - currentlocation[0]
-                    y2 = np.array((cellrecordscaled[drawcounter, 3])) - currentlocation[1]
-                    celltype = np.array((cellrecordscaled[drawcounter, 4]))
-                    if celltype == 0:
-                        pencolor = pencolor0
-                    if celltype == 1:
-                        pencolor = pencolor1
-                    if celltype == 2:
-                        pencolor = pencolor2
-                    if celltype == 3:
-                        pencolor = pencolor3
-                    dc.SetPen(wx.Pen(pencolor, rectwide, wx.SOLID))
+                    x1 = cell_record_scale[drawcounter][0] - current_loc[0]
+                    y1 = cell_record_scale[drawcounter][1] - current_loc[1]
+                    x2 = cell_record_scale[drawcounter][2] - current_loc[0]
+                    y2 = cell_record_scale[drawcounter][3] - current_loc[1]
+                    cell_type = cell_record_scale[drawcounter][4]
+                    if cell_type == 0:
+                        pen_color = pen_color_0
+                    if cell_type == 1:
+                        pen_color = pen_color_1
+                    if cell_type == 2:
+                        pen_color = pen_color_2
+                    if cell_type == 3:
+                        pen_color = pen_color_3
+                    dc.SetPen(wx.Pen(pen_color, rect_line_width, wx.SOLID))
                     dc.DrawLine(x1, y1, x1, y2)
                     dc.DrawLine(x1, y2, x2, y2)
                     dc.DrawLine(x2, y2, x2, y1)
@@ -864,102 +804,97 @@ class CellCounter(wx.Frame):
                     
             if not unscaled_image:                 
                 while drawcounter < cellnumber:
+                    # convert cell_record_scaled to cell_record 
+                    x1 = cell_record_scale[drawcounter][0]
+                    y1 = cell_record_scale[drawcounter][1]
+                    x2 = cell_record_scale[drawcounter][2]
+                    y2 = cell_record_scale[drawcounter][3]
+                    cell_type = cell_record_scale[drawcounter][4]
+                    x1scaleddown = int(x1 / (scale_bmp_width / 
+                                             (scale_bmp_width / 
+                                              scale_bmp_height *
+                                               screen_size[1] * .80)))
+                    y1scaleddown = int(y1 / (scale_bmp_height / 
+                                             (screen_size[1] * .80)))
+                    x2scaleddown = int(x2 / (scale_bmp_width / 
+                                             (scale_bmp_width / 
+                                              scale_bmp_height * 
+                                              screen_size[1] * .80)))
+                    y2scaleddown = int(y2 / (scale_bmp_height / 
+                                             (screen_size[1] * .80)))
+                    cell_record.append([x1scaleddown, y1scaleddown,
+                                               x2scaleddown, y2scaleddown, 
+                                               cell_type]) 
                     
-                    # convert cellscaled to cellrecord 
-                    x1 = np.array((cellrecordscaled[drawcounter, 0]))
-                    y1 = np.array((cellrecordscaled[drawcounter, 1]))
-                    x2 = np.array((cellrecordscaled[drawcounter, 2]))
-                    y2 = np.array((cellrecordscaled[drawcounter, 3]))
-                    celltype = np.array((cellrecordscaled[drawcounter, 4]))
-                    x1scaleddown = int(x1 / (scalebmpwidth / 
-                                             (scalebmpwidth / scalebmpheight *
-                                               screensize[1] * .80)))
-                    y1scaleddown = int(y1 / (scalebmpheight / 
-                                             (screensize[1] * .80)))
-                    x2scaleddown = int(x2 / (scalebmpwidth / 
-                                             (scalebmpwidth / 
-                                              scalebmpheight * 
-                                              screensize[1] * .80)))
-                    y2scaleddown = int(y2 / (scalebmpheight / 
-                                             (screensize[1] * .80)))
-                    cellrecordadd = np.array(([x1scaleddown, y1scaleddown,
-                                               x2scaleddown, y2scaleddown, celltype])) 
-                    cellrecord = np.vstack((cellrecord, cellrecordadd))
-                    
-                    #draw rescaled cellrecord
-                    if celltype == 0:
-                        pencolor = pencolor0
-                    if celltype == 1:
-                        pencolor = pencolor1
-                    if celltype == 2:
-                        pencolor = pencolor2
-                    if celltype == 3:
-                        pencolor = pencolor3
-                    dc.SetPen(wx.Pen(pencolor, rectwide, wx.SOLID))
-                    dc.DrawLine(x1scaleddown, y1scaleddown, x1scaleddown, y2scaleddown)
-                    dc.DrawLine(x1scaleddown, y2scaleddown, x2scaleddown, y2scaleddown)
-                    dc.DrawLine(x2scaleddown, y2scaleddown, x2scaleddown, y1scaleddown)
-                    dc.DrawLine(x2scaleddown, y1scaleddown, x1scaleddown, y1scaleddown)
+                    #draw rescaled cell_record
+                    if cell_type == 0:
+                        pen_color = pen_color_0
+                    if cell_type == 1:
+                        pen_color = pen_color_1
+                    if cell_type == 2:
+                        pen_color = pen_color_2
+                    if cell_type == 3:
+                        pen_color = pen_color_3
+                    dc.SetPen(wx.Pen(pen_color, rect_line_width, wx.SOLID))
+                    dc.DrawLine(x1scaleddown, y1scaleddown, x1scaleddown, 
+                                y2scaleddown)
+                    dc.DrawLine(x1scaleddown, y2scaleddown, x2scaleddown, 
+                                y2scaleddown)
+                    dc.DrawLine(x2scaleddown, y2scaleddown, x2scaleddown, 
+                                y1scaleddown)
+                    dc.DrawLine(x2scaleddown, y1scaleddown, x1scaleddown, 
+                                y1scaleddown)
                     drawcounter += 1
-
-                    
+           
         # Draw dot objects
-        if dotdatatest == 0:
-            pass
-
-        else:
-            cellrecorddotscaled = np.vstack((cellrecorddotscaled, 
-                                             cellrecorddotappend))
-            cellnumber = np.alen(cellrecorddotscaled)
-            drawcounter = 1
-            
+        if cell_record_pt_scale:
+            cellnumber = len(cell_record_pt_scale)
+            drawcounter = 0
+    
             if unscaled_image:
-                cellrecorddot = cellrecorddotscaled
+                cell_record_pt = cell_record_pt_scale
                 while drawcounter < cellnumber:
-                    x1 = np.array((cellrecorddotscaled[drawcounter,0])) - currentlocation[0]
-                    y1 = np.array((cellrecorddotscaled[drawcounter,1])) - currentlocation[1]
-                    celltype = np.array((cellrecorddotscaled[drawcounter,2]))
-                    if celltype == 0:
-                        pencolor = pencolor0
-                    if celltype == 1:
-                        pencolor = pencolor1
-                    if celltype == 2:
-                        pencolor = pencolor2
-                    if celltype == 3:
-                        pencolor = pencolor3
-                    dc.SetPen(wx.Pen(pencolor, 1, wx.SOLID))
+                    x1 = cell_record_pt_scale[drawcounter][0] - current_loc[0]
+                    y1 = cell_record_pt_scale[drawcounter][1] - current_loc[1]
+                    cell_type = cell_record_pt_scale[drawcounter][2]
+                    if cell_type == 0:
+                        pen_color = pen_color_0
+                    if cell_type == 1:
+                        pen_color = pen_color_1
+                    if cell_type == 2:
+                        pen_color = pen_color_2
+                    if cell_type == 3:
+                        pen_color = pen_color_3
+                    dc.SetPen(wx.Pen(pen_color, 1, wx.SOLID))
                     dc.DrawLine(x1 - 5, y1, x1 + 5, y1)
                     dc.DrawLine(x1, y1 - 5, x1, y1 + 5)
                     drawcounter += 1
                     
             if not unscaled_image:
                 while drawcounter < cellnumber:
+                    # Convert cellscaled to cell record 
+                    x1 = cell_record_pt_scale[drawcounter][0]
+                    y1 = cell_record_pt_scale[drawcounter][1]
+                    cell_type = cell_record_pt_scale[drawcounter][2]
+                    x1scaleddown = int(x1 / (scale_bmp_width / 
+                                            (scale_bmp_width / 
+                                             scale_bmp_height * 
+                                             screen_size[1] * .80)))
+                    y1scaleddown = int(y1 / (scale_bmp_height / 
+                                             (screen_size[1] * .80)))
+                    cell_record_pt.append([x1scaleddown, y1scaleddown, 
+                                                  cell_type]) 
                     
-                    # Convert cellscaled to cellrecord 
-                    x1 = np.array((cellrecorddotscaled[drawcounter, 0]))
-                    y1 = np.array((cellrecorddotscaled[drawcounter, 1]))
-                    celltype = np.array((cellrecorddotscaled[drawcounter, 2]))
-                    x1scaleddown = int(x1 / (scalebmpwidth / 
-                                            (scalebmpwidth / 
-                                             scalebmpheight * 
-                                             screensize[1] * .80)))
-                    y1scaleddown = int(y1 / (scalebmpheight / 
-                                             (screensize[1] * .80)))
-                    cellrecorddotadd = np.array(([x1scaleddown, y1scaleddown, 
-                                                  celltype])) 
-                    cellrecorddot = np.vstack((cellrecorddot, 
-                                               cellrecorddotadd))
-                    
-                    # Draw rescaled cellrecord
-                    if celltype == 0:
-                        pencolor = pencolor0
-                    if celltype == 1:
-                        pencolor = pencolor1
-                    if celltype == 2:
-                        pencolor = pencolor2
-                    if celltype == 3:
-                        pencolor = pencolor3
-                    dc.SetPen(wx.Pen(pencolor, 1, wx.SOLID))
+                    # Draw rescaled cell record
+                    if cell_type == 0:
+                        pen_color = pen_color_0
+                    if cell_type == 1:
+                        pen_color = pen_color_1
+                    if cell_type == 2:
+                        pen_color = pen_color_2
+                    if cell_type == 3:
+                        pen_color = pen_color_3
+                    dc.SetPen(wx.Pen(pen_color, 1, wx.SOLID))
                     dc.DrawLine(x1scaleddown - 5, y1scaleddown, 
                                 x1scaleddown + 5, y1scaleddown)
                     dc.DrawLine(x1scaleddown, y1scaleddown - 5, 
@@ -969,16 +904,16 @@ class CellCounter(wx.Frame):
         self.Update() 
                    
     def RectSwitch(self, event):
-        global drawtype
+        global draw_type
         self.Bind(wx.EVT_LEFT_DOWN, self.DrawRect)
         self.Bind(wx.EVT_RIGHT_DOWN, self.EraseRect)
-        drawtype = 1
+        draw_type = 1
         
     def DotSwitch(self, event):
-        global drawtype
+        global draw_type
         self.Bind(wx.EVT_LEFT_DOWN, self.DrawDot)
         self.Bind(wx.EVT_RIGHT_DOWN, self.EraseDot)
-        drawtype = 2
+        draw_type = 2
 
     def ImageMoveOn(self, event):
         global unscaled_image
@@ -986,52 +921,52 @@ class CellCounter(wx.Frame):
             self.Bind(wx.EVT_LEFT_DOWN, self.MouseMove)
 
     def ImageMoveOff(self, event):
-        global drawtype
-        if drawtype == 1:
+        global draw_type
+        if draw_type == 1:
             self.Bind(wx.EVT_LEFT_DOWN, self.DrawRect)
-        if drawtype == 2:
+        if draw_type == 2:
             self.Bind(wx.EVT_LEFT_DOWN, self.DrawDot)
         self.Bind(wx.EVT_LEFT_UP, self.does_nothing)
 
     def RectSizeSet(self, event):
-        global rectwide
+        global rect_line_width
 
         inputcapture = wx.TextEntryDialog(None, 
                                           "Rectangle draw width in pixels", 
                                           "Set Rectangle Width",
-                                          defaultValue=str(rectwide), 
+                                          defaultValue=str(rect_line_width), 
                                           style=wx.OK | wx.CANCEL)
         inputcapture.Show()
         if inputcapture.ShowModal() == wx.ID_OK:
-            rectwide = int(inputcapture.GetValue())
+            rect_line_width = int(inputcapture.GetValue())
         else:
             pass
         
     def CrossWideSet(self, event):
-        global crosswide
+        global cross_width
 
         inputcapture = wx.TextEntryDialog(None, 
                                           "Cross marker width in pixels", 
                                           "Set Marker Width",
-                                          defaultValue=str(crosswide), 
+                                          defaultValue=str(cross_width), 
                                           style=wx.OK | wx.CANCEL)
         inputcapture.Show()
         if inputcapture.ShowModal() == wx.ID_OK:
-            crosswide = int(inputcapture.GetValue())
+            cross_width = int(inputcapture.GetValue())
         else:
             pass
 
     def CrossLongSet(self, event):
-        global crosslong
+        global cross_length
 
         inputcapture = wx.TextEntryDialog(None, 
                                           "Cross marker length in pixels",
                                           "Set Marker Width", 
-                                          defaultValue=str(crosslong),
+                                          defaultValue=str(cross_length),
                                           style=wx.OK | wx.CANCEL)
         inputcapture.Show()
         if inputcapture.ShowModal() == wx.ID_OK:
-            crosslong = int(inputcapture.GetValue())
+            cross_length = int(inputcapture.GetValue())
         else:
             pass
         
@@ -1046,8 +981,8 @@ class CellCounter(wx.Frame):
 
 
 app = wx.App()
-screensize = wx.GetDisplaySize()
-width = screensize[0]
-height = screensize[1]*.95
+screen_size = wx.GetDisplaySize()
+width = screen_size[0]
+height = screen_size[1]*.95
 CellCounter(None, (width, height)).Show()
 app.MainLoop()
