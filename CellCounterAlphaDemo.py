@@ -14,11 +14,14 @@
 # Reduce dependence on global variables.
 # Break things up into more component parts.
 # Fix whitespace on side of screen on high resolution monitors
-# Add full documentation so someone besides me can use it.
+# Add more complete documentation.
+# Improve data redraw after dialog window opened or data point deleted. 
+# Currently you need to move the image to get a full redraw.
 
 # I plan to clean this up soon, but I have a ton of other things to learn 
 # that are critical for my immediate career goals.
-# Please, please look at other files to get a sense of my current programming.
+# Please look at other files in my Github account to get a sense of my current 
+# programming approach.
 
 ############################################################################## 
 # These are program variables to be manipulated by a slightly savvy user.
@@ -126,24 +129,24 @@ class CellCounter(wx.Frame):
                         "Open an image file and scale it")
         file_menu.Append(FILE_UNSCALED_OPEN, "Open Unscaled Image",
                         "Open an image file without scaling")
-        file_menu.Append(EXPORT_TXT_ALL, "Export all data",
+        file_menu.Append(EXPORT_TXT_ALL, "Save all data",
                         "Export tab-delimited .txt file with all data")
-        file_menu.Append(EXPORT_TXT_NEURON, "Export neuron data",
+        file_menu.Append(EXPORT_TXT_NEURON, "Save neuron data",
                         "Export tab-delimited .txt file with neuronal data")
-        file_menu.Append(EXPORT_TXT_GLIA, "Export glia data",
+        file_menu.Append(EXPORT_TXT_GLIA, "Save glia data",
                         "Export tab-delimited .txt file with glial data")
-        file_menu.Append(EXPORT_TXT_BV, "Export BV data",
+        file_menu.Append(EXPORT_TXT_BV, "Save BV data",
                         "Export tab-delimited .txt file with bv cell data")
-        file_menu.Append(IMPORT_TXT, "Import tracing from .txt",
+        file_menu.Append(IMPORT_TXT, "Import data from .txt",
                         "Import .txt file")
         
-        self.Bind(wx.EVT_MENU, self.ScaledImageOpen, id=FILE_SCALED_OPEN)
-        self.Bind(wx.EVT_MENU, self.UnscaledImageOpen, id=FILE_UNSCALED_OPEN)
-        self.Bind(wx.EVT_MENU, self.ExportTxtAll, id=EXPORT_TXT_ALL)
-        self.Bind(wx.EVT_MENU, self.ExportTxtNeuron, id=EXPORT_TXT_NEURON)
-        self.Bind(wx.EVT_MENU, self.ExportTxtGlia, id=EXPORT_TXT_GLIA)
-        self.Bind(wx.EVT_MENU, self.ExportTxtBV, id=EXPORT_TXT_BV)
-        self.Bind(wx.EVT_MENU, self.ImportTxt, id=IMPORT_TXT)
+        self.Bind(wx.EVT_MENU, self.scaled_image_open, id=FILE_SCALED_OPEN)
+        self.Bind(wx.EVT_MENU, self.unscaled_image_open, id=FILE_UNSCALED_OPEN)
+        self.Bind(wx.EVT_MENU, self.save_txt_all, id=EXPORT_TXT_ALL)
+        self.Bind(wx.EVT_MENU, self.save_neuron, id=EXPORT_TXT_NEURON)
+        self.Bind(wx.EVT_MENU, self.save_glia, id=EXPORT_TXT_GLIA)
+        self.Bind(wx.EVT_MENU, self.save_bv, id=EXPORT_TXT_BV)
+        self.Bind(wx.EVT_MENU, self.import_txt, id=IMPORT_TXT)
 
 
         # menu 2 - counting target selection menu
@@ -154,9 +157,9 @@ class CellCounter(wx.Frame):
         cell_type_select_menu.Append(BV_SELECT, "Blood Vessel",
                              "Mark blood vessel cells")
         
-        self.Bind(wx.EVT_MENU, self.NeuronButton, id=NEURON_SELECT)
-        self.Bind(wx.EVT_MENU, self.GliaButton, id=GLIA_SELECT)
-        self.Bind(wx.EVT_MENU, self.BVButton, id=BV_SELECT)
+        self.Bind(wx.EVT_MENU, self.neuron_button, id=NEURON_SELECT)
+        self.Bind(wx.EVT_MENU, self.glia_button, id=GLIA_SELECT)
+        self.Bind(wx.EVT_MENU, self.bv_button, id=BV_SELECT)
 
         # menu 3 - counting methods menu
         count_select_menu.Append(DOT_SWITCH, "Point Mode",
@@ -164,8 +167,8 @@ class CellCounter(wx.Frame):
         count_select_menu.Append(RECT_SWITCH, "Rect Mode",
                                "Mark objects with a surrounding box")
         
-        self.Bind(wx.EVT_MENU, self.DotSwitch, id=DOT_SWITCH)
-        self.Bind(wx.EVT_MENU, self.RectSwitch, id=RECT_SWITCH)
+        self.Bind(wx.EVT_MENU, self.dot_switch, id=DOT_SWITCH)
+        self.Bind(wx.EVT_MENU, self.rect_switch, id=RECT_SWITCH)
 
         # menu 4 - pen color and cursor control tools
         marker_ctrl_menu.Append(RECTSIZE_SET, "Change box size",
@@ -175,9 +178,9 @@ class CellCounter(wx.Frame):
         marker_ctrl_menu.Append(CROSSLONG_SET, "Change cross length",
                               "Change length of cursor lines")
         
-        self.Bind(wx.EVT_MENU, self.RectSizeSet, id=RECTSIZE_SET)
-        self.Bind(wx.EVT_MENU, self.CrossWideSet, id=CROSSWIDE_SET)
-        self.Bind(wx.EVT_MENU, self.CrossLongSet, id=CROSSLONG_SET)
+        self.Bind(wx.EVT_MENU, self.rect_size_set, id=RECTSIZE_SET)
+        self.Bind(wx.EVT_MENU, self.cross_wide_set, id=CROSSWIDE_SET)
+        self.Bind(wx.EVT_MENU, self.cross_long_set, id=CROSSLONG_SET)
         
         # menu 5 - movement and macro view menu
         image_ctrl_menu.Append(IMAGEMOVE_ON, "Move Image", 
@@ -185,8 +188,8 @@ class CellCounter(wx.Frame):
         image_ctrl_menu.Append(IMAGEMOVE_OFF, "Mark Objects",
                              "Turn on marking and turn off image move")
         
-        self.Bind(wx.EVT_MENU, self.ImageMoveOn, id=IMAGEMOVE_ON)
-        self.Bind(wx.EVT_MENU, self.ImageMoveOff, id=IMAGEMOVE_OFF)
+        self.Bind(wx.EVT_MENU, self.image_move_on, id=IMAGEMOVE_ON)
+        self.Bind(wx.EVT_MENU, self.image_move_off, id=IMAGEMOVE_OFF)
         
         # menu headers
         menu_bar.Append(file_menu, "File")
@@ -197,8 +200,8 @@ class CellCounter(wx.Frame):
         self.SetMenuBar(menu_bar)
               
         # mouseclick setup - default is rectangle counting mode
-        self.Bind(wx.EVT_LEFT_DOWN, self.DrawRect)
-        self.Bind(wx.EVT_RIGHT_DOWN, self.EraseRect)
+        self.Bind(wx.EVT_LEFT_DOWN, self.draw_rect)
+        self.Bind(wx.EVT_RIGHT_DOWN, self.erase_rect)
         self.Bind(wx.EVT_PAINT, self.on_paint)
         self.Bind(wx.EVT_ENTER_WINDOW, self.create_crosshair)
 
@@ -219,7 +222,7 @@ class CellCounter(wx.Frame):
 ##############################################################################
 # functions for program below this point
 
-    def ScaledImageOpen(self, event):
+    def scaled_image_open(self, event):
         global scale_bmp_width
         global scale_bmp_height
         global unscaled_image
@@ -256,7 +259,7 @@ class CellCounter(wx.Frame):
         unscaled_image = False
         self.Refresh()
 
-    def UnscaledImageOpen(self, event):
+    def unscaled_image_open(self, event):
         global scale_bmp_width
         global scale_bmp_height
         global unscaled_image
@@ -290,7 +293,7 @@ class CellCounter(wx.Frame):
         unscaled_image = True
         self.Refresh()
         
-    def DrawRect(self, event):
+    def draw_rect(self, event):
         global cell_record
         global cell_record_scale
         global cell_counter
@@ -320,28 +323,28 @@ class CellCounter(wx.Frame):
             # return coords to original image scale for output if image has 
             # been rescaled
             if unscaled_image:
-                x1scaled = x1 + current_loc[0]
-                y1scaled = y1 + current_loc[1]
-                x2scaled = x2 + current_loc[0]
-                y2scaled = y2 + current_loc[1]
+                x1_scaled = x1 + current_loc[0]
+                y1_scaled = y1 + current_loc[1]
+                x2_scaled = x2 + current_loc[0]
+                y2_scaled = y2 + current_loc[1]
                 
             if not unscaled_image:
-                x1scaled = int(x1 * scale_bmp_width / 
+                x1_scaled = int(x1 * scale_bmp_width / 
                               (scale_bmp_width / scale_bmp_height * 
                                screen_size[1] * .80))
-                y1scaled = int(y1 * scale_bmp_height /(screen_size[1] * .80))
-                x2scaled = int(x2 * scale_bmp_width /(scale_bmp_width / 
+                y1_scaled = int(y1 * scale_bmp_height /(screen_size[1] * .80))
+                x2_scaled = int(x2 * scale_bmp_width /(scale_bmp_width / 
                                                     scale_bmp_height * 
                                                     screen_size[1] * .80))
-                y2scaled = int(y2 * scale_bmp_height /(screen_size[1]*.80))
+                y2_scaled = int(y2 * scale_bmp_height /(screen_size[1]*.80))
     
-            cell_record_scale.append([x1scaled, y1scaled, x2scaled, y2scaled, 
-                                      cell_type])
+            cell_record_scale.append([x1_scaled, y1_scaled, x2_scaled, 
+                                      y2_scaled, cell_type])
             print cell_record_scale
             cell_counter += 1
             self.points = []
 
-    def EraseRect(self, event):
+    def erase_rect(self, event):
         global cell_record
         global cell_counter
         global cell_record_scale
@@ -427,7 +430,7 @@ class CellCounter(wx.Frame):
         cell_record_scale = cell_record_scale[:-1]
         cell_counter -= 1
 
-    def DrawDot(self, event):
+    def draw_dot(self, event):
         global cell_record_pt
         global cell_record_pt_scale
         global cell_counter
@@ -444,20 +447,20 @@ class CellCounter(wx.Frame):
         # Return coords to original image scale for output 
         # if image has been rescaled.
         if unscaled_image:
-            x1scaled = x1 + current_loc[0]
-            y1scaled = y1 + current_loc[1]
+            x1_scaled = x1 + current_loc[0]
+            y1_scaled = y1 + current_loc[1]
         if not unscaled_image:
-            x1scaled = int(x1 * scale_bmp_width / 
+            x1_scaled = int(x1 * scale_bmp_width / 
                           (scale_bmp_width / 
                            scale_bmp_height * screen_size[1] * .80))
-            y1scaled = int(y1 * scale_bmp_height / (screen_size[1]*.80))
+            y1_scaled = int(y1 * scale_bmp_height / (screen_size[1]*.80))
 
-        cell_record_pt_scale.append([x1scaled, y1scaled, cell_type])
+        cell_record_pt_scale.append([x1_scaled, y1_scaled, cell_type])
         print cell_record_pt_scale
         cell_counter += 1
         self.points = []
 
-    def EraseDot(self, event):
+    def erase_dot(self, event):
         global cell_record_pt
         global cell_record_pt_scale
         global cell_counter
@@ -604,25 +607,25 @@ class CellCounter(wx.Frame):
         else:
             pass
         
-    def NeuronButton(self, event):
+    def neuron_button(self, event):
         global pen_color
         global cell_type
         pen_color = ("BLUE")
         cell_type = 1
 
-    def GliaButton(self, event):
+    def glia_button(self, event):
         global pen_color
         global cell_type
         pen_color = ("GREEN")
         cell_type = 2
 
-    def BVButton(self, event):
+    def bv_button(self, event):
         global pen_color
         global cell_type
         pen_color = ("PURPLE")
         cell_type = 3
 
-    def ExportTxtAll(self, event):
+    def save_txt_all(self, event):
         global cell_record
         global cell_record_scale
         global cell_counter
@@ -650,7 +653,7 @@ class CellCounter(wx.Frame):
             for row in cell_record_pt_scale:
                 output_writer.writerow(row)
                 
-    def ExportTxtNeuron(self, event):
+    def save_txt_cell_type(self, save_cell_type=0):
         global cell_record
         
         self.saveTxt = wx.TextCtrl(self, size=(200, -1))
@@ -668,74 +671,26 @@ class CellCounter(wx.Frame):
                                        quoting=csv.QUOTE_MINIMAL)
             output_writer.writerow(["x1", "y1", "x2", "y2"])
             for row in cell_record_scale:
-                if row[4] == 1:
+                if row[4] == save_cell_type:
                     output_writer.writerow(row)
                     
         # export dot tracings
         if cell_record_pt_scale:
             output_writer.writerow(["x1", "y1", "cell type"])
             for row in cell_record_pt_scale:
-                if row[2] == 1:
+                if row[2] == save_cell_type:
                     output_writer.writerow(row)
-                
+    
+    def save_neuron(self, event):
+        self.save_txt_cell_type(save_cell_type=1)
+        
+    def save_glia(self, event):
+        self.save_txt_cell_type(save_cell_type=2)  
+          
+    def save_bv(self, event):
+        self.save_txt_cell_type(save_cell_type=3)                
 
-    def ExportTxtGlia(self, event):
-        global cell_record
-
-        self.saveTxt = wx.TextCtrl(self, size=(200,-1))
-        dialog = wx.FileDialog(None, "Enter", style=wx.FD_SAVE)
-        if dialog.ShowModal() == wx.ID_OK:
-            self.saveTxt.SetValue(dialog.GetPath())
-        dialog.Destroy()
-        path = self.saveTxt.GetValue()
-        self.saveTxt.Destroy()
-
-        # export rectangle tracings
-        if cell_record_scale:
-            output_writer = csv.writer(open(path, 'wb'), delimiter='\t', 
-                                       quotechar='|',
-                                       quoting=csv.QUOTE_MINIMAL)
-            output_writer.writerow(["x1", "y1", "x2", "y2"])
-            for row in cell_record_scale:
-                if row[4] == 2:
-                    output_writer.writerow(row)
-                    
-        # export dot tracings
-        if cell_record_pt_scale:
-            output_writer.writerow(["x1", "y1", "cell type"])
-            for row in cell_record_pt_scale:
-                if row[2] == 2:
-                    output_writer.writerow(row)
-                    
-    def ExportTxtBV(self, event):
-        global cell_record
-
-        self.saveTxt = wx.TextCtrl(self, size=(200,-1))
-        dialog = wx.FileDialog(None, "Enter", style=wx.FD_SAVE)
-        if dialog.ShowModal() == wx.ID_OK:
-            self.saveTxt.SetValue(dialog.GetPath())
-        dialog.Destroy()
-        path = self.saveTxt.GetValue()
-        self.saveTxt.Destroy()
-
-        # export rectangle tracings
-        if cell_record_scale:
-            output_writer = csv.writer(open(path, 'wb'), delimiter='\t', 
-                                       quotechar='|',
-                                       quoting=csv.QUOTE_MINIMAL)
-            output_writer.writerow(["x1", "y1", "x2", "y2"])
-            for row in cell_record_scale:
-                if row[4] == 3:
-                    output_writer.writerow(row)
-                    
-        # export dot tracings
-        if cell_record_pt_scale:
-            output_writer.writerow(["x1", "y1", "cell type"])
-            for row in cell_record_pt_scale:
-                if row[2] == 3:
-                    output_writer.writerow(row)
-
-    def ImportTxt(self, event):
+    def import_txt(self, event):
         global cell_record_scale
         global cell_record_pt_scale
         global cell_record
@@ -754,7 +709,6 @@ class CellCounter(wx.Frame):
         raw_read = csv.reader(open(path, 'rb'), delimiter='\t', 
                               quotechar='|',
                               quoting=csv.QUOTE_MINIMAL)
-        raw_import = []
         cell_record, cell_record_scale = [], []
         cell_record_pt, cell_record_pt_scale = [], []
         for row in raw_read:
@@ -768,7 +722,6 @@ class CellCounter(wx.Frame):
                     cell_record_scale.append(row)
                 if len(row) == 3:
                     cell_record_pt_scale.append(row)
-        print raw_import
 
         # redraw a clean image
         dc.Blit(0, 0, 1600, 1200, dc2, current_loc[0], current_loc[1],
@@ -810,20 +763,20 @@ class CellCounter(wx.Frame):
                     x2 = cell_record_scale[drawcounter][2]
                     y2 = cell_record_scale[drawcounter][3]
                     cell_type = cell_record_scale[drawcounter][4]
-                    x1scaleddown = int(x1 / (scale_bmp_width / 
+                    x1_scaled_down = int(x1 / (scale_bmp_width / 
                                              (scale_bmp_width / 
                                               scale_bmp_height *
                                                screen_size[1] * .80)))
-                    y1scaleddown = int(y1 / (scale_bmp_height / 
+                    y1_scaled_down = int(y1 / (scale_bmp_height / 
                                              (screen_size[1] * .80)))
-                    x2scaleddown = int(x2 / (scale_bmp_width / 
+                    x2_scaled_down = int(x2 / (scale_bmp_width / 
                                              (scale_bmp_width / 
                                               scale_bmp_height * 
                                               screen_size[1] * .80)))
-                    y2scaleddown = int(y2 / (scale_bmp_height / 
+                    y2_scaled_down = int(y2 / (scale_bmp_height / 
                                              (screen_size[1] * .80)))
-                    cell_record.append([x1scaleddown, y1scaleddown,
-                                               x2scaleddown, y2scaleddown, 
+                    cell_record.append([x1_scaled_down, y1_scaled_down,
+                                               x2_scaled_down, y2_scaled_down, 
                                                cell_type]) 
                     
                     #draw rescaled cell_record
@@ -836,14 +789,14 @@ class CellCounter(wx.Frame):
                     if cell_type == 3:
                         pen_color = pen_color_3
                     dc.SetPen(wx.Pen(pen_color, rect_line_width, wx.SOLID))
-                    dc.DrawLine(x1scaleddown, y1scaleddown, x1scaleddown, 
-                                y2scaleddown)
-                    dc.DrawLine(x1scaleddown, y2scaleddown, x2scaleddown, 
-                                y2scaleddown)
-                    dc.DrawLine(x2scaleddown, y2scaleddown, x2scaleddown, 
-                                y1scaleddown)
-                    dc.DrawLine(x2scaleddown, y1scaleddown, x1scaleddown, 
-                                y1scaleddown)
+                    dc.DrawLine(x1_scaled_down, y1_scaled_down, 
+                                x1_scaled_down, y2_scaled_down)
+                    dc.DrawLine(x1_scaled_down, y2_scaled_down, 
+                                x2_scaled_down, y2_scaled_down)
+                    dc.DrawLine(x2_scaled_down, y2_scaled_down, 
+                                x2_scaled_down, y1_scaled_down)
+                    dc.DrawLine(x2_scaled_down, y1_scaled_down, 
+                                x1_scaled_down, y1_scaled_down)
                     drawcounter += 1
            
         # Draw dot objects
@@ -876,13 +829,13 @@ class CellCounter(wx.Frame):
                     x1 = cell_record_pt_scale[drawcounter][0]
                     y1 = cell_record_pt_scale[drawcounter][1]
                     cell_type = cell_record_pt_scale[drawcounter][2]
-                    x1scaleddown = int(x1 / (scale_bmp_width / 
+                    x1_scaled_down = int(x1 / (scale_bmp_width / 
                                             (scale_bmp_width / 
                                              scale_bmp_height * 
                                              screen_size[1] * .80)))
-                    y1scaleddown = int(y1 / (scale_bmp_height / 
+                    y1_scaled_down = int(y1 / (scale_bmp_height / 
                                              (screen_size[1] * .80)))
-                    cell_record_pt.append([x1scaleddown, y1scaleddown, 
+                    cell_record_pt.append([x1_scaled_down, y1_scaled_down, 
                                                   cell_type]) 
                     
                     # Draw rescaled cell record
@@ -895,40 +848,40 @@ class CellCounter(wx.Frame):
                     if cell_type == 3:
                         pen_color = pen_color_3
                     dc.SetPen(wx.Pen(pen_color, 1, wx.SOLID))
-                    dc.DrawLine(x1scaleddown - 5, y1scaleddown, 
-                                x1scaleddown + 5, y1scaleddown)
-                    dc.DrawLine(x1scaleddown, y1scaleddown - 5, 
-                                x1scaleddown, y1scaleddown + 5)
+                    dc.DrawLine(x1_scaled_down - 5, y1_scaled_down, 
+                                x1_scaled_down + 5, y1_scaled_down)
+                    dc.DrawLine(x1_scaled_down, y1_scaled_down - 5, 
+                                x1_scaled_down, y1_scaled_down + 5)
                     drawcounter += 1
 
         self.Update() 
                    
-    def RectSwitch(self, event):
+    def rect_switch(self, event):
         global draw_type
-        self.Bind(wx.EVT_LEFT_DOWN, self.DrawRect)
-        self.Bind(wx.EVT_RIGHT_DOWN, self.EraseRect)
+        self.Bind(wx.EVT_LEFT_DOWN, self.draw_rect)
+        self.Bind(wx.EVT_RIGHT_DOWN, self.erase_rect)
         draw_type = 1
         
-    def DotSwitch(self, event):
+    def dot_switch(self, event):
         global draw_type
-        self.Bind(wx.EVT_LEFT_DOWN, self.DrawDot)
-        self.Bind(wx.EVT_RIGHT_DOWN, self.EraseDot)
+        self.Bind(wx.EVT_LEFT_DOWN, self.draw_dot)
+        self.Bind(wx.EVT_RIGHT_DOWN, self.erase_dot)
         draw_type = 2
 
-    def ImageMoveOn(self, event):
+    def image_move_on(self, event):
         global unscaled_image
         if unscaled_image:
             self.Bind(wx.EVT_LEFT_DOWN, self.MouseMove)
 
-    def ImageMoveOff(self, event):
+    def image_move_off(self, event):
         global draw_type
         if draw_type == 1:
-            self.Bind(wx.EVT_LEFT_DOWN, self.DrawRect)
+            self.Bind(wx.EVT_LEFT_DOWN, self.draw_rect)
         if draw_type == 2:
-            self.Bind(wx.EVT_LEFT_DOWN, self.DrawDot)
+            self.Bind(wx.EVT_LEFT_DOWN, self.draw_dot)
         self.Bind(wx.EVT_LEFT_UP, self.does_nothing)
 
-    def RectSizeSet(self, event):
+    def rect_size_set(self, event):
         global rect_line_width
 
         inputcapture = wx.TextEntryDialog(None, 
@@ -942,7 +895,7 @@ class CellCounter(wx.Frame):
         else:
             pass
         
-    def CrossWideSet(self, event):
+    def cross_wide_set(self, event):
         global cross_width
 
         inputcapture = wx.TextEntryDialog(None, 
@@ -956,7 +909,7 @@ class CellCounter(wx.Frame):
         else:
             pass
 
-    def CrossLongSet(self, event):
+    def cross_long_set(self, event):
         global cross_length
 
         inputcapture = wx.TextEntryDialog(None, 
