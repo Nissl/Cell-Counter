@@ -1,22 +1,23 @@
 # This program is written for Python 2.6-2.7.
-# It requires the wxpython library
-# It allows the user to load an image and mark the coordinates of objects
-# (cells for my uses), as well as moving the image around using click and 
-# drag. The coordinates of cells in the image can then be saved.
-# Examples of these files in both .mat and .txt format, with the accompanying
-# images, are in the associated folders in the github distribution.
+# It requires the wxpython library.
+# It allows the user to load an image and mark the 2-d coordinates of objects
+# (cells for my uses). Users can also move the image around using click and 
+# drag. The coordinates of cells in the image can be saved and loaded.
+# Examples of coordinate files in both .mat and .txt format, along with 
+# accompanying images, are in the associated folders in the github 
+# distribution.
 
-# I want to emphasize: this is an alpha version. The code needs to be cleaned 
-# up. I wrote this years ago, and I know the overall program design could be 
-# dramatically improved.
+# I want to emphasize: this is an alpha version. I wrote this years ago, and 
+# I know the overall program design could be dramatically improved.
 
-# Current todo:
+# Current high priority todo:
 # Reduce dependence on global variables.
 # Break things up into more component parts.
 # Fix whitespace on side of screen on high resolution monitors
 # Add more complete documentation.
 # Improve data redraw after dialog window opened or data point deleted. 
-# Currently you need to move the image to get a full redraw.
+#     (move the image to get a full redraw)
+# Options to change marking classes without editing code directly.
 
 # I plan to clean this up soon, but I have a ton of other things to learn 
 # that are critical for my immediate career goals.
